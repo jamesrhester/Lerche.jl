@@ -84,22 +84,26 @@ partial(f,a...) = (b...) -> f(a...,b...)
 
 ## Is my method defined? Is there a more elegant way?
 
-have_method(s,mod) = begin
-    try
-        methods(eval(mod,Symbol(s)))
-    catch e
-        if e isa UndefVarError
-            println("$(Symbol(s) not found")
-            return false
-        else
-            rethrow(e)
+macro have_method(s)
+    quote
+        try
+            methods(@eval $__module__ Symbol($s))
+        catch e
+            if e isa UndefVarError
+                println("$(Symbol($s)) not found")
+                return false
+            else
+                rethrow(e)
+            end
         end
+        return true
     end
-    return true
 end
 
-macro invoke_callback(c,args...) = begin
+macro invoke_callback(c,args...)
     quote
-        eval(Symbol($c))($args...)
+        f = @eval $__module__ $(Symbol(c))
+        println("Evaluating in $(@__MODULE__), callback is $f, $(typeof(f))")
+        f($args...)
     end
 end
