@@ -24,24 +24,26 @@ meta(t::Tree) = t._meta
 
 _pretty_label(t::Tree) = t.data
 
-pretty(t::Tree,level,indent_str) = begin
-    if length(t.children) == 1 && !(typeof(t.children[1] == Tree))
-        return [indent_str*level, _pretty_label(t), "\t", "$(t.children[1])", "\n"]
+pretty(t::Tree,level,indent_str::String) = begin
+    if length(t.children) == 1 && !(typeof(t.children[1]) == Tree)
+        return [repeat(indent_str,level), _pretty_label(t), "\t", "$(t.children[1])", "\n"]
     end
 
-    l = [ indent_str*level, _pretty_label(t), "\n" ]
+    l = [ repeat(indent_str,level), _pretty_label(t), "\n" ]
     for n in t.children
         if typeof(n) == Tree
-            l += pretty(n,level+1, indent_str)
+            append!(l, pretty(n,level+1, indent_str))
         else
-            l += [ indent_str*(level+1), "$n", "\n" ]
+            append!(l, [ repeat(indent_str,level+1), "$n", "\n" ])
         end
     end
     return l
 end
 
-pretty(t::Tree; indent_str = "  ") = join(" ", pretty(t,0, indent_str))
+pretty(t::Tree; indent_str = "  ") = join(pretty(t,0, indent_str),"")
 
+#Base.show(io::IO,t::Tree) = println(io,pretty(t))
+Base.show(io::IO,t::Tree) = println(io,"Tree($(t.data), $(t.children))")
 """
 Expand (inline) children at the given indices. This may not work as we
 can't change array sizes??
@@ -56,7 +58,7 @@ end
 Base.:(==)(t1::Tree,t2::Tree) = t1.data == t2.data && t1.children == t2.children
 
 find_pred(t::Tree,pred) = begin
-    filter(pred, iter_subtrees(t))
+    filter(pred, collect(iter_subtrees(t)))
 end
 
 find_data(t::Tree,data) = begin
@@ -84,9 +86,9 @@ iter_subtrees(t::Tree) = Channel() do tree_chan
     visited = Set()
     q = [t]
     l = []
-    while q
+    while !isempty(q)
         subtree = pop!(q)
-        append!(l,subtree)
+        push!(l,subtree)
         if objectid(subtree) in visited
             continue
         end

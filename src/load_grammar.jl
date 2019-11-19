@@ -19,7 +19,7 @@ const _TERMINAL_NAMES = Dict(
     "!" => "BANG",
     "@" => "AT",
     "#" => "HASH",
-    "$" => "DOLLAR",
+    "\$" => "DOLLAR",
     "%" => "PERCENT",
     "^" => "CIRCUMFLEX",
     "&" => "AMPERSAND",
@@ -57,7 +57,7 @@ const TERMINALS = Dict(
     "TILDE"=> "~",
     "RULE"=> "!?[_?]?[a-z][_a-z0-9]*",
     "TERMINAL"=> "_?[A-Z][_A-Z0-9]*",
-    "STRING"=> raw"\"(\\\"|\\\\|[^\"\n])*?\"i?",
+    "STRING"=> raw""""("|\\\\|[^"\n])*?"i?""",
     "REGEXP"=> raw"/(?!/)(\\/|\\\\|[^/\n])*?/[" * _RE_FLAGS * "]*",
     "_NL"=> raw"(\r?\n)+\s*",
     "WS"=> raw"[ \t]+",
@@ -69,7 +69,7 @@ const TERMINALS = Dict(
     "NUMBER"=> raw"\d+",
 )
 
-RULES = Dict(
+const RULES = Dict(
     "start"=> ["_list"],
     "_list"=>  ["_item", "_list _item"],
     "_item"=>  ["rule", "term", "statement", "_NL"],
@@ -139,36 +139,37 @@ end
 
 EBNF_to_BNF() = EBNF_to_BNF([],Dict(),"anon",0,nothing)
 
-_add_recurse_rule(etb,type_,expr) = begin
-    if expr in keys(etb.rules_by_expr)
+_add_recurse_rule(etb::EBNF_to_BNF,type_,expr) = begin
+    if expr in collect(keys(etb.rules_by_expr))
         return etb.rules_by_expr[expr]
     end
     new_name = "__$(etb.prefix)_$(type_)_$(etb.i)"
     etb.i += 1
     t = NonTerminal(new_name)
     tree = Tree("expansions",[Tree("expansion",[expr]),Tree("expansion",[t,expr])])
-    append!(etb.new_rules,(new_name,tree,etb.rule_options))
+    push!(etb.new_rules,(new_name,tree,etb.rule_options))
     etb.rules_by_expr[expr] = t
     return t
 end
 
-expr(etb,rule,op,args...) = begin
+@inline_rule expr(etb::EBNF_to_BNF,rule,op,args...) = begin
     if op.value == "?"
         return Tree("expansions",[rule,Tree("expansion",[])])
     elseif op.value == "+"
-        return etb._add_recurse_rule("plus",rule)
+        return _add_recurse_rule(etb,"plus",rule)
     elseif op.value == "*"
-        new_name = etb._add_recurse_rule("star",rule)
+        new_name = _add_recurse_rule(etb,"star",rule)
+        return Tree("expansions",[new_name, Tree("expansion",[])])
     elseif op.value == "~"
         if length(args) == 1
             mn = mx = Int(args[1])
         else
-            mn,mx = map(x->Int(x),args)
+            mn,mx = parse.(Int,args)
             if mx < mn
                 error("Bad range for $rule ($mn..$mx isn't allowed)")
             end
         end
-        return Tree("expansions", [Tree("expansion",fill(rule,n)) for n in mn:mx+1])
+        return Tree("expansions", [Tree("expansion",fill(rule,n)) for n in mn:mx])
     end
 end
 
@@ -184,13 +185,13 @@ end
 
 # Changes the argument but we can't add exclamation marks or it will
 # spoil the link between rule and function
-expansion(srv::SimplifyRule_Visitor,tree) = begin
+@rule expansion(srv::SimplifyRule_Visitor,tree) = begin
     _flatten!(srv,tree)
     for (i,child) in enumerate(tree.children)
-        if child isa Tree and child.data == "expansions"
+        if child isa Tree && child.data == "expansions"
             tree.data = "expansions"
             tree.children = [visit(srv,Tree("expansion",
-                                           [if i==j option else other
+                                           [if i==j option else other end
                                             for (j,other) in enumerate(tree.children)]))
                              for option in Set(child.children)]
             _flatten!(srv,tree)
@@ -199,7 +200,7 @@ expansion(srv::SimplifyRule_Visitor,tree) = begin
     end
 end
 
-alias(srv::SimplifyRule_Visitor,tree) = begin
+@rule alias(srv::SimplifyRule_Visitor,tree) = begin
     rule,alias_name = tree.children
     if rule.data == "expansions"
         aliases = []
@@ -211,39 +212,42 @@ alias(srv::SimplifyRule_Visitor,tree) = begin
     end
 end
 
-expansions(srv::SimplifyRule_Visitor,tree) = begin
+@rule expansions(srv::SimplifyRule_Visitor,tree) = begin
     _flatten!(srv,tree)
-    tree.children = Array(Set(tree.children))
+    tree.children = unique(tree.children)
 end
 
-abstract type RuleTreeToText <: Transformer end
+struct RuleTreeToText <: Transformer end
 
-expansions(rtt::RuleTreeToText,x) = x
+@rule expansions(rtt::RuleTreeToText,x) = begin
+    println("Pass through $x")
+    return x
+end
 
-expansion(rtt::RuleTreeToText,symbols) = symbols,nothing
+@rule expansion(rtt::RuleTreeToText,symbols) = (symbols,nothing)
 
-alias(rtt::RuleTreeToText,x) = begin
+@rule alias(rtt::RuleTreeToText,x) = begin
     (expansion, _alias), alias = x
     @assert _alias == nothing
     return expansion, alias.value
 end
 
-abstract type CanonizeTree <: Transformer_InPlace end
+struct CanonizeTree <: Transformer_InPlace end
 
-maybe(ct::CanonizeTree,expr) = Tree("expr",[expr, Token("OP","?",-1)])
+@inline_rule maybe(ct::CanonizeTree,expr) = Tree("expr",[expr, Token("OP","?",-1)])
 
-tokenmods(ct::CanonizeTree,args...) = begin
+@inline_rule tokenmods(ct::CanonizeTree,args...) = begin
     if length(args) == 1
         return Array(args)
     end
     tokenmods, value = args   #What does this mean people?
-    return push(tokenmods,value)
+    return push!(tokenmods,value)
 end
 
 mutable struct PrepareAnonTerminals <: Transformer_InPlace
     terminals
-    term_set
-    term_reverse
+    term_set::Set
+    term_reverse::Dict
     i
 end
 
@@ -251,9 +255,9 @@ PrepareAnonTerminals(terminals) = PrepareAnonTerminals(terminals,Set([td.name fo
                                                        Dict([td.pattern => td for td in terminals]),
                                                        0)
 
-pattern(panon::PrepareAnonTerminals,p) = begin
+@inline_rule pattern(panon::PrepareAnonTerminals,p) = begin
     value = p.value
-    if p in keys(panon.term_reverse) && p.flags != panon.term_reverse[p].pattern.flags
+    if p in collect(keys(panon.term_reverse)) && p.flags != panon.term_reverse[p].pattern.flags
         throw(GrammarError("Conflicting flags for the same terminal: $p"))
     end
     term_name = nothing
@@ -273,7 +277,7 @@ pattern(panon::PrepareAnonTerminals,p) = begin
             end
         end
     elseif p isa PatternRE
-        if p in keys(panon.term_reverse)
+        if p in collect(keys(panon.term_reverse))
             term_name = panon.term_reverse[p].name
         end
     else
@@ -286,43 +290,55 @@ pattern(panon::PrepareAnonTerminals,p) = begin
     end
     
     if !(term_name in panon.term_set)
-        @assert !(p in panon.term_reverse)
+        @assert !(p in keys(panon.term_reverse))
         push!(panon.term_set,term_name)
         termdef = TerminalDef(term_name,p)
         panon.term_reverse[p] = termdef
-        append!(panon.terminals,termdef)
+        push!(panon.terminals,termdef)
     end
 
     return Terminal(term_name,filter_out = p isa PatternStr)
 end
 
-_rfind(s,choices) = max([rfind(s,c) for c in choices])
+_rfind(s,choices) = begin
+    biggest = -1
+    for c in choices
+        p = findlast("$c",s)
+        if !isnothing(p)
+            biggest = max(biggest,p[1])
+        end
+    end
+    return biggest
+end
+
 
 _fix_escaping(s) = error("Cannot fix escaping")
 
 ## TODO write this properly
 _literal_to_pattern(literal) = begin
+    println("Converting $literal to pattern")
     v = literal.value
     flag_start = _rfind(v, "/\"") + 1
     @assert flag_start > 0
     flags = v[flag_start:end]
-    @assert all([f -> f in _RE_FLAGS, flags])
-    v = v[1:flag_start]
-    @assert v[1] == v[end] && v[1] in "\"/"
-    x = v[2:end]
+    @assert all(f -> occursin(f, _RE_FLAGS), flags)
+    v = v[1:flag_start-1]
+    @assert v[1] == v[end] && occursin(v[1], "\"/")
+    x = v[2:end-1]   #drop delimiters
     ### TODO fix escaping
-    if literal.type = "STRING"
-        s = replace(s,"\\\\","\\")
+    s = x
+    if literal.type_ == "STRING"
+        s = replace(s,"\\\\"=>"\\")
     end
     return Dict("STRING"=> PatternStr,
                 "REGEXP" => PatternRE)[literal.type_](s,flags)
 end
 
-abstract type PrepareLiterals <: Transformer_InPlace end
+struct PrepareLiterals <: Transformer_InPlace end
 
-literal(pl::PrepareLiterals, literal) = Tree("pattern",[_literal_to_pattern(literal)])
+@inline_rule literal(pl::PrepareLiterals, literal) = Tree("pattern",[_literal_to_pattern(literal)])
 
-range(pl::PrepareLiterals,start,rend) = begin
+@inline_rule range(pl::PrepareLiterals,start,rend) = begin
     @assert start.type_ == rend.type_ == "STRING"
     start = start.value[2:end-1]
     rend = rend.value[2:end-1]
@@ -331,14 +347,14 @@ range(pl::PrepareLiterals,start,rend) = begin
     return Tree("pattern",[PatternRE(regexp)])
 end
 
-abstract type TerminalTreeToPattern <: Transformer end
+struct TerminalTreeToPattern <: Transformer end
 
-pattern(tttp::TerminalTreeToPattern, ps) = begin
-    p , = ps
+@rule pattern(tttp::TerminalTreeToPattern, ps) = begin
+    p = ps[1]
     return p
 end
 
-expansion(tttp::TerminalTreeToPattern, items) = begin
+@rule expansion(tttp::TerminalTreeToPattern, items) = begin
     if length(items) == 1
         return items[1]
     end
@@ -346,10 +362,10 @@ expansion(tttp::TerminalTreeToPattern, items) = begin
         throw(GrammarError("Lark doesn't support joining terminals with conflicting flags!"))
     end
     return PatternRE("(?:$(join("|",(to_regexp(i) for i in items))))",
-                     if length(items) > 0 items[1].flags else ())
+                     if length(items) > 0 items[1].flags else () end)
 end
 
-expansions(tttp::TerminalTreeToPattern, exps) = begin
+@rule expansions(tttp::TerminalTreeToPattern, exps) = begin
     if length(exps) == 1
         return items[1]
     end
@@ -359,7 +375,7 @@ expansions(tttp::TerminalTreeToPattern, exps) = begin
     return PatternRE("(?:$(join("|",(to_regexp(i) for i in exps))))", exps[1].flags)
 end
 
-expr(tttp::TerminalTreeToPattern,args) = begin
+@rule expr(tttp::TerminalTreeToPattern,args) = begin
     inner,op = args[1:2]
     if op == "~"
         if length(args) == 3
@@ -377,33 +393,35 @@ expr(tttp::TerminalTreeToPattern,args) = begin
     return PatternRE("(?:$(to_regexp(inner)))$(inner.flags)")
 end
 
-alias(tttp::TerminalTreeToPattern,t) = throw(GrammarError("Aliasing not allowed in terminals (You used -> in the wrong place)"))
+@rule alias(tttp::TerminalTreeToPattern,t) = throw(GrammarError("Aliasing not allowed in terminals (You used -> in the wrong place)"))
 
-value(tttp::TerminalTreeToPattern,v) = v[1]
+@rule value(tttp::TerminalTreeToPattern,v) = v[1]
 
-abstract type PrepareSymbols <: Transformer_InPlace end
+struct PrepareSymbols <: Transformer_InPlace end
 
-value(ps::PrepareSymbols,v) = begin
-    v, = v
+@rule value(ps::PrepareSymbols,v) = begin
+    print("PrepareSymbols/value called with $v")
+    v = v[1]
     if v isa Tree
         return v
     elseif v.type_ == "RULE"
         return NonTerminal(v.value)
     elseif v.type_ == "TERMINAL"
-        return Terminal(v.value, filter_out = x -> first(x) == "_")
+        return Terminal(v.value, filter_out = x -> startswith(x,"_"))
     end
     @assert false
 end
 
 _choice_of_rules(rules) = Tree("expansions",[Tree("expansion",[Token("RULE",name)]) for name in rules])
 
-mutable struct grammar
-    term_defs
+# Note order of fields matches call order
+mutable struct Grammar
     rule_defs
+    term_defs
     ignore
 end
 
-compile(g::grammar) = begin
+compile(g::Grammar) = begin
     # Deepcopy to allow multiple calling
     term_defs = deepcopy(g.term_defs)
     rule_defs = deepcopy(g.rule_defs)
@@ -420,7 +438,7 @@ compile(g::grammar) = begin
         end
         expansions = collect(find_data(term_tree,"expansion"))
         if length(expansions) == 1 && length(expansions[1].children) == 0
-            throw(GrammarError("Terminals cannot be empty (%$name)"))
+            throw(GrammarError("Terminals cannot be empty ($name)"))
         end
     end
     terminals = [TerminalDef(name, transform(transformer,term_tree), priority)
@@ -437,10 +455,16 @@ compile(g::grammar) = begin
     ebnf_to_bnf = EBNF_to_BNF()
     rules = []
     for (name, rule_tree, options) in rule_defs
-        ebnf_to_bnf.rule_options = if options && options.keep_all_tokens RuleOptions(keep_all_tokens=true) else None end
+        ebnf_to_bnf.rule_options = if options.keep_all_tokens  #drop check that options != nothing
+            RuleOptions(keep_all_tokens=true)
+        else
+            nothing
+        end
         tree = transform(transformer,rule_tree)
-        append!(rules,(name, transform(ebnf_to_bnf,tree), options))
+        push!(rules,(name, transform(ebnf_to_bnf,tree), options))
     end
+
+    println("Transformed rules: $rules")
     
     append!(rules, ebnf_to_bnf.new_rules)
     
@@ -453,8 +477,9 @@ compile(g::grammar) = begin
     compiled_rules = []
     for (name, tree, options) in rules
         visit(simplify_rule,tree)
+        println("Tree after simplification:\n$tree")
         expansions = transform(rule_tree_to_text,tree)
-        
+        println("Tree after expansions:\n$tree, returned $expansions")
         for (expansion, alias) in expansions
             if alias != nothing && first(name) =='_'
                 throw(GrammarError("Rule $name is marked for expansion (it starts with an underscore) and isn't allowed to have aliases (alias=$alias)"))
@@ -488,7 +513,7 @@ resolve_term_references(term_defs) = begin
                     if item.type_ == "RULE"
                         throw(GrammarError("Rules aren't allowed inside terminals ($item in $name)"))
                     end
-                    if item.type_ == "TERMINAL":
+                    if item.type_ == "TERMINAL"
                         exp.children[1] = token_dict[item]
                         changed = true
                     end
@@ -503,34 +528,46 @@ resolve_term_references(term_defs) = begin
 end
 
 
-options_from_rule(name, *x) = begin
+options_from_rule(name, x...) = begin
     if length(x) > 1
         priority, expansions = x
         priority = parse(Int,priority)
     else
-        expansions ,= x
+        expansions = x[1]
         priority = nothing
     end
     
 
-    keep_all_tokens = first(name)=='!'
+    keep_all_tokens = startswith(name,"!")
     name = lstrip(name,'!')
-    expand1 = first(name)=='?'
+    expand1 = startswith(name,"?")
     name = lstrip(name,'?')
 
-    return name, expansions, RuleOptions(keep_all_tokens, expand1, priority=priority)
+    return name, expansions, RuleOptions(keep_all_tokens=keep_all_tokens, expand1=expand1, priority=priority)
 end
 
-symbols_from_strcase(expansion) = begin
-    return [if isuppercase(x) Terminal(x, filter_out=first(x)=='_') else NonTerminal(x) for x in expansion]
+symbols_from_strcase(x) = begin
+    if isupper(x)
+        return Terminal(x, filter_out=first(x)=='_')
+    else
+        return NonTerminal(x)
+    end
 end
 
+# emulate Python isupper, which returns true if all cased characters are uppercase.
+# It returns false if there are no letters at all
+# We interpret this as all letters are uppercase.  We differ from Python in that
+# we allow strings with all non-letters to return "true".
 
-abstract type PrepareGrammar <:Transformer_InPlace end
+isupper(s) = begin
+    return all(y -> !isletter(y) || isuppercase(y),s)
+end
 
-terminal(pg::PrepareGrammar, name) = name
+struct PrepareGrammar <:Transformer_InPlace end
 
-nonterminal(pg::PrepareGrammar, name) = name
+@inline_rule terminal(pg::PrepareGrammar, name) = name
+
+@inline_rule nonterminal(pg::PrepareGrammar, name) = name
 
 
 mutable struct GrammarLoader
@@ -541,9 +578,19 @@ end
 GrammarLoader() = begin
     terminals = [TerminalDef(name, PatternRE(value)) for (name, value) in TERMINALS]
     rules = [options_from_rule(name, x) for (name, x) in  RULES]
-    rules = [Rule(NonTerminal(r), symbols_from_strcase(split(x)), nothing, o) for (r, xs, o) in rules for x in xs]
-    callback = create_callback(ParseTreeBuilder(rules, Tree))
-    lexer_conf = LexerConf(terminals, ["WS", "COMMENT"])
+    rules = [Rule(NonTerminal(r), symbols_from_strcase.(split(x)), nothing, o) for (r, xs, o) in rules for x in xs]
+    #== debugging
+    for r in rules
+        println("Rules: $r")
+        println("===")
+    end
+    ==#
+    callback = create_callback(ParseTreeBuilder(rules))
+    println("All keys for calling back:")
+    for k in keys(callback)
+        println("$k")
+    end
+    lexer_conf = LexerConf(terminals, ignore=["WS", "COMMENT"])
 
     parser_conf = ParserConf(rules, callback, "start")
     GrammarLoader(LALR_TraditionalLexer(lexer_conf, parser_conf),CanonizeTree())
@@ -551,184 +598,197 @@ end
 
 "Parse grammar_text, verify, and create Grammar object. Display nice messages on error."
 load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
-        try
-            tree = transform(gl.canonize_tree,parse(gl.parser,grammar_text+"\n") )
-        catch e
-            if e isa UnexpectedCharacters
-                context = get_context(e,grammar_text)
-                throw(GrammarError("Unexpected input at line $(e.line) column $e.column in $(grammar_name): \n\n$context"))
-                      
-            elseif e isa UnexpectedToken
-                context = get_context(e,grammar_text)
-                error = match_examples(e,gl, {
-                "Unclosed parenthesis": ["a: (\n"],
-                "Umatched closing parenthesis": ["a: )\n", "a: [)\n", "a: (]\n"],
-                "Expecting rule or terminal definition (missing colon)": ["a\n", "a->\n", "A->\n", "a A\n"],
-                "Alias expects lowercase name": ["a: -> \"a\"\n"],
-                "Unexpected colon": ["a::\n", "a: b:\n", "a: B:\n", "a: \"a\":\n"],
-                "Misplaced operator": ["a: b??", "a: b(?)", "a:+\n", "a:?\n", "a:*\n", "a:|*\n"],
-                "Expecting option (\"|\") or a new rule or terminal definition": ["a:a\n()\n"],
-                "%import expects a name": ["%import \"a\"\n"],
-                "%ignore expects a value": ["%ignore %import\n"],
-            })
-                if error != nothing
-                    throw(GrammarError("$error at line $(e.line) column $(e.column)\n\n$(context)"))
+    try
+        parsetree = parse(gl.parser,grammar_text*"\n")
+        println("Original parse tree:\n$parsetree")
+        tree = transform(gl.canonize_tree,parse(gl.parser,grammar_text*"\n") )
+    catch e
+        if e isa UnexpectedCharacters
+            context = get_context(e,grammar_text)
+            throw(GrammarError("Unexpected input at line $(e.line) column $e.column in $(grammar_name): \n\n$context"))
+            
+        elseif e isa UnexpectedToken
+            context = get_context(e,grammar_text)
+            error = match_examples(e,gl, Dict(
+                "Unclosed parenthesis"=> ["a: (\n"],
+                "Umatched closing parenthesis"=> ["a: )\n", "a: [)\n", "a: (]\n"],
+                "Expecting rule or terminal definition (missing colon)"=> ["a\n", "a->\n", "A->\n", "a A\n"],
+                "Alias expects lowercase name"=> ["a: -> \"a\"\n"],
+                "Unexpected colon"=> ["a::\n", "a: b:\n", "a: B:\n", "a: \"a\":\n"],
+                "Misplaced operator"=> ["a: b??", "a: b(?)", "a:+\n", "a:?\n", "a:*\n", "a:|*\n"],
+                "Expecting option (\"|\") or a new rule or terminal definition"=> ["a:a\n()\n"],
+                "%import expects a name"=> ["%import \"a\"\n"],
+                "%ignore expects a value"=> ["%ignore %import\n"],
+            ))
+            if error != nothing
+                throw(GrammarError("$error at line $(e.line) column $(e.column)\n\n$(context)"))
                 
-                elseif occursin("STRING",e.expected)
-                    throw(GrammarError("Expecting a value at line $(e.line) column $(e.column)\n\n$context"))
-                end
+            elseif occursin("STRING",e.expected)
+                throw(GrammarError("Expecting a value at line $(e.line) column $(e.column)\n\n$context"))
             end
-            rethrow(e)
         end
+        rethrow(e)
+    end
+
+    tree = transform(PrepareGrammar(),tree)
     
-        tree = transform(PrepareGrammar(),tree)
+    # Extract grammar items
+    defs = classify(tree.children, key=c -> c.data, value=c -> c.children)
+    term_defs = pop!(defs,"term", [])
+    rule_defs = pop!(defs,"rule", [])
+    statements = pop!(defs,"statement", [])
+    @assert length(defs) == 0
 
-        # Extract grammar items
-        defs = classify(tree.children, c -> c.data, c -> c.children)
-        term_defs = pop!(defs,"term", [])
-        rule_defs = pop!(defs,"rule", [])
-        statements = pop!("statement", [])
-        @assert length(defs) == 0
+    term_defs = [if length(td)==3 td else (td[1], 1, td[2]) end for td in term_defs]
+    term_defs = [(name.value, (t, int(p))) for (name, p, t) in term_defs]
+    rule_defs = [options_from_rule(x[1],x[2:end]...) for x in rule_defs]
 
-        term_defs = [if length(td)==3 td else (td[1], 1, td[2]) for td in term_defs]
-        term_defs = [(name.value, (t, int(p))) for (name, p, t) in term_defs]
-        rule_defs = [options_from_rule(x...) for x in rule_defs]
-
-        # Execute statements
-        ignore = []
-        for (stmt,) in statements
-            if stmt.data == "ignore"
-                t ,= stmt.children
-                push!(ignore,t)
-            elseif stmt.data == "import"
-                if length(stmt.children) > 1
-                    path_node, arg1 = stmt.children
-                else
-                    path_node ,= stmt.children
-                    arg1 = nothing
-                end
-                if arg1 isa Tree  # Multi import
-                    dotted_path = path_node.children
-                    names = arg1.children
-                    aliases = names  # Can't have aliased multi import, so all aliases will be the same as names
-                else  # Single import
-                    dotted_path = path_node.children[:end-1]
-                    names = [path_node.children[end]]  # Get name from dotted path
-                    aliases = if arg1 != nothing [arg1] else names  end # Aliases if exist
-                end
-                    
-                grammar_path = joinpath(dotted_path...) * EXT
-
-                if path_node.data == "import_lib":  # Import from library
-                    g = import_grammar(grammar_path)
-                else  # Relative import
-                    if grammar_name == "<string>"  # Import relative to script file path if grammar is coded in script
-                        base_file = abspath(@__file__)
-                    else
-                        base_file = grammar_name  # Import relative to grammar file path if external grammar file
-                    end
-                    
-                    base_path = splitpath(base_file)[1]
-                    g = import_grammar(grammar_path, base_paths=[base_path])
-                end
-                
-                aliases_dict = Dict(zip(names, aliases))
-                new_td, new_rd = import_from_grammar_into_namespace(g, join(".",dotted_path), aliases_dict)
-
-                append!(term_defs, new_td)
-                append!(rule_defs, new_rd)
-            elseif stmt.data == "declare"
-                for t in stmt.children
-                    push!(term_defs,[t.value, (nothing, nothing)])
-                end
-                
+    println("Check: term_defs $term_defs\nrule_defs $rule_defs")
+    
+    # Execute statements
+    ignore = []
+    for a_stmt in statements
+        @assert length(a_stmt) == 1
+        stmt = a_stmt[1]
+        if stmt.data == "ignore"
+            t = stmt.children[1]
+            push!(ignore,t)
+        elseif stmt.data == "import"
+            if length(stmt.children) > 1
+                path_node, arg1 = stmt.children
             else
-                assert false stmt
+                path_node = stmt.children[1]
+                arg1 = nothing
             end
-        end
-    
-
-        # Verify correctness 1
-        for (name, _) in term_defs
-            if name[1:2]=="__"
-                throw(GrammarError("Names starting with double-underscore are reserved (Error at $name)"))
-            end
-        end
-    
-
-        # Handle ignore tokens
-        # XXX A slightly hacky solution. Recognition of %ignore TERMINAL as separate comes from the lexer's
-        #     inability to handle duplicate terminals (two names, one value)
-        ignore_names = []
-        for t in ignore
-            if t.data=="expansions" and length(t.children) == 1:
-                t2 ,= t.children
-                if t2.data=="expansion" and length(t2.children) == 1:
-                    item ,= t2.children
-                    if item.data == 'value':
-                        item ,= item.children
-                        if item isa Token && item.type_ == "TERMINAL"
-                            push!(ignore_names,item.value)
-                            continue
-                        end
-                    end
-                end
-            end
-            
-
-            name = "__IGNORE_$(length(ignore_names))"
-            push!(ignore_names,name)
-            push!(term_defs,(name, (t, 0)))
-        end
-
-        # Verify correctness 2
-        terminal_names = Set()
-        for (name, _) in term_defs
-            if name in terminal_names
-                throw(GrammarError("Terminal '$name' defined more than once"))
-            end
-            
-            push!(terminal_names,name)
-        end
-
-        if Set(ignore_names) > terminal_names
-            throw(GrammarError("Terminals $(setdiff(ignore_names,terminal_names)) were marked to ignore but were not defined!"))
-        end
-
-        resolve_term_references(term_defs)
-
-        rules = rule_defs
-
-        rule_names = Set()
-        for (name, _x, _o) in rules
-            if name[1:2]== "__"
-                throw(GrammarError("Names starting with double-underscore are reserved (Error at $name)"))
-            end
-            
-            if name in rule_names:
-                throw(GrammarError("Rule '$name' defined more than once"))
-            end
-            push!(rule_names,name)
-        end
-
-        for (name, expansions, _o) in rules
-            used_symbols = Set(t for x in find_data(expansions,"expansion")
-                              for t in scan_values(x,t -> t.type_ in ("RULE", "TERMINAL")))
-            for sym in used_symbols
-                if sym.type_ == "TERMINAL"
-                    if !(sym in terminal_names)
-                        throw(GrammarError("Token '$sym' used but not defined (in rule $name)"))
-                    end
+            if arg1 isa Tree  # Multi import
+                dotted_path = path_node.children
+                names = arg1.children
+                aliases = names  # Can't have aliased multi import, so all aliases will be the same as names
+            else  # Single import
+                dotted_path = path_node.children[:end-1]
+                names = [path_node.children[end]]  # Get name from dotted path
+                aliases = if arg1 != nothing
+                    [arg1]
                 else
-                    if !(sym in rule_names)
-                        throw(GrammarError("Rule '$sym' used but not defined (in rule $name)"))
+                    names
+                end # Aliases if exist
+            end
+            
+            grammar_path = joinpath(dotted_path...) * EXT
+
+            if path_node.data == "import_lib"  # Import from library
+                g = import_grammar(grammar_path)
+            else  # Relative import
+                if grammar_name == "<string>"  # Import relative to script file path if grammar is coded in script
+                    base_file = abspath(@__FILE__)
+                else
+                    base_file = grammar_name  # Import relative to grammar file path if external grammar file
+                end
+                
+                base_path = splitpath(base_file)[1]
+                g = import_grammar(grammar_path, base_paths=[base_path])
+            end
+            
+            aliases_dict = Dict(zip(names, aliases))
+            new_td, new_rd = import_from_grammar_into_namespace(g, join(".",dotted_path), aliases_dict)
+
+            append!(term_defs, new_td)
+            append!(rule_defs, new_rd)
+        elseif stmt.data == "declare"
+            for t in stmt.children
+                push!(term_defs,[t.value, (nothing, nothing)])
+            end
+            
+        else
+            @assert false stmt
+        end
+    end
+    
+
+    # Verify correctness 1
+    for (name, _) in term_defs
+        if name[1:2]=="__"
+            throw(GrammarError("Names starting with double-underscore are reserved (Error at $name)"))
+        end
+    end
+    
+
+    # Handle ignore tokens
+    # XXX A slightly hacky solution. Recognition of %ignore TERMINAL as separate comes from the lexer's
+    #     inability to handle duplicate terminals (two names, one value)
+    ignore_names = []
+    for t in ignore
+        if t.data=="expansions" && length(t.children) == 1
+            t2 = t.children[1]
+            if t2.data=="expansion" && length(t2.children) == 1
+                item = t2.children[1]
+                if item.data == "value"
+                    item = item.children[1]
+                    if item isa Token && item.type_ == "TERMINAL"
+                        push!(ignore_names,item.value)
+                        continue
                     end
                 end
             end
         end
+        
+
+        name = "__IGNORE_$(length(ignore_names))"
+        push!(ignore_names,name)
+        push!(term_defs,(name, (t, 0)))
+    end
+    # Verify correctness 2
+    terminal_names = Set()
+    for (name, _) in term_defs
+        if name in terminal_names
+            throw(GrammarError("Terminal '$name' defined more than once"))
+        end
+    
+        push!(terminal_names,name)
+    end
+
+    if Set(ignore_names) > terminal_names
+        throw(GrammarError("Terminals $(setdiff(ignore_names,terminal_names)) were marked to ignore but were not defined!"))
+    end
+
+    resolve_term_references(term_defs)
+    rules = rule_defs
+    rule_names = Set()
+    for (name, _x, _o) in rules
+        if startswith(name, "__")
+            throw(GrammarError("Names starting with double-underscore are reserved (Error at $name)"))
+        end
+            
+        if name in rule_names
+            throw(GrammarError("Rule '$name' defined more than once"))
+        end
+        push!(rule_names,name)
+    end
+
+    println("Rule names: $rule_names")
+
+    for (name, expansions, _o) in rules
+        used_symbols = Set([t for x in find_data(expansions,"expansion")
+                            for t in scan_values(x,t -> t.type_ in ("RULE", "TERMINAL"))])
+        println("Symbols used for $name: $used_symbols")
+        for sym in used_symbols
+            if sym.type_ == "TERMINAL"
+                if !(sym in terminal_names)
+                    throw(GrammarError("Token '$sym' used but not defined (in rule $name)"))
+                end
+            else
+                if !(sym in rule_names)
+                    throw(GrammarError("Rule '$sym' used but not defined (in rule $name)"))
+                end
+            end
+        end
+    end
                     
-        # TODO don't include unused terminals, they can only cause trouble!
+# TODO don't include unused terminals, they can only cause trouble!
 
-        return Grammar(rules, term_defs, ignore_names)
+    println("Baking it in, baby: Rules $rules\n\nTerm defs: $term_defs\n\nIgnoring: $ignore_names")
+    return Grammar(rules, term_defs, ignore_names)
 
+end
 
+load_grammar(text::String;options...) = load_grammar(GrammarLoader(),text,options...)

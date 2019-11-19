@@ -1,4 +1,7 @@
-struct GrammarError <: Exception end
+struct GrammarError <: Exception
+    message::String
+end
+
 struct ParseError <: Exception end
 struct LexError <: Exception end
 
@@ -12,8 +15,8 @@ abstract type UnexpectedInput <: Exception end
 # TODO: are we accessing strings in a Unicode-aware way?
 get_context(ui::UnexpectedInput,text;span=40) = begin
     pos = ui.pos_in_stream
-    start = max(pos - span,0)
-    _end = pos + span
+    start = max(pos - span,1)
+    _end = min(pos + span,length(text))
     before = rsplit(text[start:pos],"\n",limit=2)[end]
     after = split(text[pos:_end],"\n",limit=2)[1]
     return before*after*"\n"*repeat(" ",length(before)) * "^\n"
@@ -27,7 +30,7 @@ end
 For Julia we need to make sure the correct parse_fn is dispatched for
 this to make sense.
 """
-match_examples(ui::UnexpectedInput,parse_type,examples;parse_fn = parse) = begin
+#== match_examples(ui::UnexpectedInput,parse_type,examples;parse_fn = parse) = begin
     candidate = nothing
     for (label,example) in examples
         for malformed in example
@@ -39,24 +42,25 @@ match_examples(ui::UnexpectedInput,parse_type,examples;parse_fn = parse) = begin
                         try
                             if ut.token == ui.token
                                 return label
-                            catch a
-                                if !(a isa AttributeError)
-                                    rethrow(a)
-                                end
+                            end
+                        catch a
+                            if !(a isa AttributeError)
+                                rethrow(a)
                             end
                         end
                         if candidate == nothing
                             candidate = label
                         end
                     end
+                else
+                    rethrow(ut)
                 end
-            else
-                rethrow(ut)
             end
         end
     end
     return candidate
 end
+==#
 
 struct UnexpectedCharacters <: UnexpectedInput
     seq
@@ -68,11 +72,11 @@ struct UnexpectedCharacters <: UnexpectedInput
     state
 end
 
-UnexpectedCharacters(seq,lex_pos,line,column) = UnexpectedCharacters(seq,lex_pos,line,column,nothing,nothing,nothing)
+UnexpectedCharacters(seq,lex_pos,line,column;state=nothing) = UnexpectedCharacters(seq,lex_pos,line,column,nothing,nothing,nothing)
 
 Base.showerror(io::IO,uc::UnexpectedCharacters) = begin
-    message = "\n\n $(get_context(uc,seq)"
-    if allowed != nothing
+    message = "\n\n $(get_context(uc,uc.seq))"
+    if uc.allowed != nothing
         message *= "\nExpecting: $allowed"
     end
     println(io,message)
@@ -98,6 +102,6 @@ end
 Base.showerror(io::IO,ut::UnexpectedToken) = begin
     message = "Unexpected token $(ut.token) at line $(ut.line), column $(ut.column).\n"
     message *= "Expected: $(join(", ",ut.expected))"
-    println(message)
+    println(io,message)
 end
 

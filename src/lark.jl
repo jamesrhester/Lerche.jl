@@ -27,10 +27,9 @@
         lexer_callbacks - Dictionary of callbacks for the lexer. May alter tokens during lexing. Use with caution.
 """
 
-check_options(od::Dict{String,Any}) = begin
+check_options(od) = begin
     get!(od,"debug",false)
     get!(od,"keep_all_tokens",false)
-    get!(od,"tree_class",Tree)
     get!(od,"cache_grammar", false)
     get!(od,"postlex", nothing)
     get!(od,"parser", "earley")
@@ -46,14 +45,14 @@ check_options(od::Dict{String,Any}) = begin
     if !(od["parser"] in ("earley", "lalr", "cyk", nothing))
         error("Option error: Parser must be earley, lalr, cyk or nothing")
     end
-    if od["parser"] == "earley" && !(transformer==nothing)
+    if od["parser"] == "earley" && !(od["transformer"]==nothing)
         error("Cannot specify an embedded transformer when using the Earley algorithm." *
               "Please use your transformer on the resulting parse tree, or use a different algorithm (i.e. lalr)")
     end
 end
 
 struct Lark
-    options::Dict{String,Any}
+    options::Dict
     source
     grammar
     terminals
@@ -64,20 +63,23 @@ struct Lark
     _parse_tree_builder
 end
 
-Lark(grammar::IOStream,options) = begin
+Lark(grammar::IOStream;options...) = begin
     source = grammar.name
     cache_file = "larkcache_$(basename(source))"
     textgrammar = read(grammar)
-    Lark(textgrammar,options,source,cache_file)
+    Lark(textgrammar,Dict{String,Any}((String(k),v) for (k,v) in options),source,cache_file)
 end
 
-Lark(grammar::String,options) = begin
-    source = "<string">
+Lark(grammar::String;options...) = begin
+    source = "<string>"
     cache_file = "larkcache__$(hash(grammar)%(2^32))"
-    Lark(grammar,options,source,cache_file)
+    Lark(grammar,Dict{String,Any}((String(k),v) for (k,v) in options),source,cache_file)
 end
 
 Lark(grammar::String,options,source,cache_file) = begin
+    if isempty(options)
+        options = Dict{String,Any}()
+    end
     check_options(options)
     if options["lexer"] == "auto"
         if options["parser"] == "lalr"
@@ -92,7 +94,7 @@ Lark(grammar::String,options,source,cache_file) = begin
     end
     
     lexer = options["lexer"]
-    @assert (lexer in ("standard", "contextual", "dynamic", "dynamic_complete") !! (lexer isa Lexer))
+    @assert lexer in ("standard", "contextual", "dynamic", "dynamic_complete") || (lexer isa Lexer)
     
     if options["ambiguity"] == "auto"
         if options["parser"] == "earley"
@@ -105,10 +107,10 @@ Lark(grammar::String,options,source,cache_file) = begin
     end
     @assert options["ambiguity"] in ("resolve", "explicit", "auto", "resolve__antiscore_sum")
     
-    grammar = load_grammar(grammar, source)
+    grammar = load_grammar(grammar, grammar_name=source)
     
     # Compile the EBNF grammar into BNF
-    terminals, rules, ignore_tokens = grammar.compile()
+    terminals, rules, ignore_tokens = compile(grammar)
     lexer_conf = LexerConf(terminals,ignore_tokens,options["postlex"],options["lexer_callbacks"])
     if options["parser"] != nothing
         parser = _build_parser(options,rules,lexer_conf)
@@ -121,9 +123,9 @@ end
 
 _build_parser(options,rules,lexer_conf) = begin
     parser_class = get_frontend(options["parser"],options["lexer"])
-    _parse_tree_builder = ParseTreeBuilder(rules,options["tree_class"],options["propagate_positions"],
+    _parse_tree_builder = ParseTreeBuilder(rules,options["propagate_positions"],
                                            options["keep_all_tokens"],options["parser"] != "lalr")
-    callback = _parse_tree_builder.create_callback(options["transformer"])
+    callback = create_callback(_parse_tree_builder,options["transformer"])
     parser_conf = ParserConf(rules,callback,options["start"])
     return parser_class(lexer_conf,parser_conf,options)
 end

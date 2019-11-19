@@ -1,30 +1,61 @@
+# A RulePtr tracks a location within a rule
+#== 
+ The index value has a pythonic meaning of
+ being "between" two values. So an index of
+ 0 means 'prior to the first element'
+ and an index of length = 'after the last
+ element' (and therefore satisfied). So
+ in Python the rule starts at zero and
+ finishes at length (even though the
+ expansion only goes to coordinate length-1)
+
+ We emulate this in Julia by interpreting
+ the index accordingly as zero-based. 
+
+==#
 struct RulePtr
     rule::Rule
     index::Int
+    RulePtr(r::Rule,i) = begin
+        @assert i <= length(r.expansion) "$i beyond end of $r"
+        new(r,i)
+        end
 end
 
-Base.show(io::IOStream,r::RulePtr) = begin
-    before = r.rule.expansion[1:r.index]
-    after = r.rule.expansion[r.index:end]
-    print(io,"<$(r.origin) : $(join(" ",before)) * $(join(" ",after))>")
+Base.show(io::IO,r::RulePtr) = begin
+    if r.index == 0
+        before = []
+        after = r.rule.expansion
+    elseif r.index < length(r.rule.expansion) #emulate python
+        before = r.rule.expansion[1:r.index]
+        after = r.rule.expansion[r.index+1:end]
+    else
+        before = r.rule.expansion
+        after = []
+    end
+    print(io,"<$(r.rule.origin.name) : $(join(before," ")) * $(join(after," "))>")
 end
 
-next(r::RulePtr) = r.rule.expansion[r.index]
+next(r::RulePtr) = r.rule.expansion[r.index+1]
 
 advance(r::RulePtr,sym) = begin
     @assert next(r) == sym
     RulePtr(r.rule,r.index + 1)
 end
 
+# Have we satisfied the rule by getting to the end?
 is_satisfied(r::RulePtr) = r.index == length(r.rule.expansion)
+
+Base.isequal(r1::RulePtr,r2::RulePtr) = r1.rule == r2.rule && r1.index == r2.index
+Base.hash(r1::RulePtr) = hash(r1.rule)+hash(r1.index)
 
 update_set(set1,set2) = begin
     if isempty(set2)
         return false
     end
-    copy = Set(set1)
+    backup = copy(set1)
     union!(set1,set2)
-    return set1 != copy
+    return set1 != backup
 end
 """Calculate FOLLOW sets.
 
@@ -60,15 +91,12 @@ calculate_sets(rules) = begin
         changed = false
         for rule in rules
             if Set(rule.expansion) <= NULLABLE
-                if update_set(NULLABLE,Set(rule.origin))
+                if update_set(NULLABLE,Set([rule.origin]))
                     changed = true
                 end
             end
-            # TODO mimic exact list behaviour of Python
-            # [:i] will give empty list for i = 0
-            # but [1:1] will give first element for Julia
             for (i,sym) in enumerate(rule.expansion)
-                if Set(rule.expansion[1:i]) <= NULLABLE
+                if i==1 || Set(rule.expansion[1:i-1]) <= NULLABLE
                     if update_set(FIRST[rule.origin],FIRST[sym])
                         changed = true
                     end
@@ -91,7 +119,7 @@ calculate_sets(rules) = begin
                 end
 
                 for j in i+1:length(rule.expansion)
-                    if Set(rule.expansion[i+1:j]) <= NULLABLE
+                    if j==i+1 || Set(rule.expansion[i+1:j-1]) <= NULLABLE
                         if update_set(FOLLOW[sym], FIRST[rule.expansion[j]])
                             changed = true
                         end
@@ -101,6 +129,16 @@ calculate_sets(rules) = begin
         end
     end
 
+    #==
+    println("\nFIRST: $(length(FIRST)) items")
+    for (i,j) in FIRST
+        println("$i:$j")
+    end
+    println("\nFOLLOW: $(length(FOLLOW)) items")
+    for (i,j) in FOLLOW
+        println("$i:$j")
+    end
+    println("\nNULLABLE: $NULLABLE") ==#
     return FIRST,FOLLOW, NULLABLE
 end
 
@@ -108,17 +146,17 @@ abstract type GrammarAnalyzer end
 
 init_analyser!(g::GrammarAnalyzer,parser_conf;debug=false) = begin
     g.debug = debug
-    rules = append(parser_conf["rules"], [Rule(NonTerminal("$root"), [NonTerminal(parser_conf["start"]), Terminal("$END")])])
-    g.rules_by_origin = classify(rules, r -> r.origin)
+    rules = push!(parser_conf.rules, Rule(NonTerminal("\$root"), [NonTerminal(parser_conf.start), Terminal("\$END")]))
+    g.rules_by_origin = classify(rules, key = r -> r.origin)
     @assert length(rules) == length(Set(rules))
     for r in rules
         for sym in r.expansion
-            if !(sym.is_term || sym in g.rules_by_origin)
+            if !(sym.is_term || sym in collect(keys(g.rules_by_origin)))
                 throw(GrammarError("Using an undefined rule: $sym"))
             end
         end
     end
-    g.start_state = g.expand_rule(NonTerminal("$root"))
+    g.start_state = expand_rule(g,NonTerminal("\$root"))
     g.FIRST, g.FOLLOW, g.NULLABLE = calculate_sets(rules)
     return g
 end
@@ -126,16 +164,18 @@ end
 """Returns all init_ptrs accessible by rule (recursive)"""
 expand_rule(g::GrammarAnalyzer,rule) = begin
     init_ptrs = Set()
-    _expand_rule(rule) = begin
+    _expand_rule(_rule) = begin
         Channel() do rule_chan
-            @assert !rule.is_term, rule
-            for r in g.rules_by_origin[rule]
-                init_ptr = RulePtr(r,1)
+            @assert !_rule.is_term _rule
+            for r in g.rules_by_origin[_rule]
+                init_ptr = RulePtr(r,0)
                 push!(init_ptrs,init_ptr)
 
-                if r.expansion != nothing
+                if !isempty(r.expansion)
+                    # Next symbol from this
                     new_r = next(init_ptr)
                     if !new_r.is_term
+                        # Non-terminal, send it back
                         put!(rule_chan,new_r)
                     end
                 end
@@ -143,8 +183,7 @@ expand_rule(g::GrammarAnalyzer,rule) = begin
         end
     end
 
-    for _ in bfs([rule], _expand_rule)
-    end
+    _ = collect(bfs([rule], _expand_rule))
 
     return Set(init_ptrs)
 end

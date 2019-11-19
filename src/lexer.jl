@@ -11,7 +11,7 @@ abstract type Pattern end
 get_flags(p1::Pattern) = p1.flags
 get_value(p1::Pattern) = p1.value
 
-Base.equals(p1::Pattern, p2::Pattern) = begin
+Base.:(==)(p1::Pattern, p2::Pattern) = begin
     if p1.value == p2.value && p1.flags == p2.flags
         return true
     end
@@ -31,15 +31,17 @@ struct PatternStr <: Pattern
     flags
 end
 
-struct PatternRe <: Pattern
+struct PatternRE <: Pattern
     value
     flags
 end
 
-to_regexp(pre::PatternRe) = _get_flags(pre.value)
-to_regexp(pstr::PatternStr) = _get_flags(escape_string(pstr.value))
-min_width(pre::PatternRe) = get_regexp_width(to_regexp(pre))[1]
-max_width(pre::PatternRe) = get_regexp_width(to_regexp(pre))[2]
+PatternRE(value;flags=()) = PatternRE(value,flags)
+
+to_regexp(pre::PatternRE) = _get_flags(pre,pre.value)
+to_regexp(pstr::PatternStr) = _get_flags(pstr,escape_string(pstr.value))
+min_width(pre::PatternRE) = get_regexp_width(to_regexp(pre))[1]
+max_width(pre::PatternRE) = get_regexp_width(to_regexp(pre))[2]
 
 min_width(pstr::PatternStr) = length(pstr.value)
 max_width(pstr::PatternStr) = min_width(pstr)
@@ -52,26 +54,43 @@ end
 
 TerminalDef(name,pattern; priority=1) = TerminalDef(name,pattern,priority)
 
-mutable struct Token <: String
-    type_
-    pos_in_stream
-    value
-    line
-    column
-    end_line
-    end_column
+mutable struct Token #<: AbstractString
+    type_::String
+    pos_in_stream::Union{Int,Nothing}
+    value::String
+    line::Union{Int,Nothing}
+    column::Union{Int,Nothing}
+    end_line::Union{Int,Nothing}
+    end_column::Union{Int,Nothing}
 end
 
 Token(type_,value;pos_in_stream=nothing,line=nothing,column=nothing) =
     Token(type_,pos_in_stream,value,line,column,nothing,nothing)
 
-# Lexer.py ... is this the right meaning?
-Base.equals(t1::Token,t2::Token) = begin
+# Reimplement some string methods for later use...
+Base.startswith(t::Token,c) = startswith(t.value,c)
+Base.lstrip(t::Token,c) = lstrip(t.value,c)
+
+# Lexer.py implements a generic equality, where any comparison other
+# than with another token defaults to string comparison
+Base.:(==)(t1::Token,t2::Token) = begin
     if t1.type_ != t2.type_
         return false
     end
-    return t1 == t2
+    return t1.value == t2.value
 end
+
+Base.:(==)(t1::Token,t2) = begin
+    return isequal(t1.value,t2)
+end
+
+Base.:(==)(t1,t2::Token) = begin
+    return isequal(t1,t2.value)
+end
+
+Base.hash(t1::Token) = hash(t1.value)
+
+Base.show(io::IO,t::Token) = print(io,"Token($(t.type_), $(t.value))")
 
 new_borrow_pos(type_,value, borrow_t) = Token(type_,value,borrow_t.pos_in_stream,line=borrow_t.line, column=borrow_t.column)
 
@@ -79,13 +98,13 @@ new_borrow_pos(type_,value, borrow_t) = Token(type_,value,borrow_t.pos_in_stream
 
 mutable struct LineCounter
     newline_char
-    char_pos::Int
+    char_pos::Int #1 is first pos unlike Python
     line::Int
     column::Int
     line_start_pos::Int
 end
 
-LineCounter() = LineCounter("\n",0,1,1,0)
+LineCounter() = LineCounter("\n",1,1,1,1)
 
 """
 feed
@@ -94,7 +113,7 @@ Consume a token and calculate the new line & column.
 As an optional optimization, set test_newline=false if token doesn't contain a newline.
 TODO: check indexing is correct
 """
-feed(lc::LineCounter,token;test_newline=true) = begin
+feed!(lc::LineCounter,token;test_newline=true) = begin
     if test_newline
         newlines = count(x -> x == lc.newline_char, token)
         if newlines > 0
@@ -106,58 +125,55 @@ feed(lc::LineCounter,token;test_newline=true) = begin
     lc.column = lc.char_pos - lc.line_start_pos + 1
 end
 
+#==
 mutable struct _Lex
     lexer
     state
 end
 
-_Lex(lexer;state=nothing) = _Lex(lexer,state)
 
-# We create a channel
-lex(l::_Lex,stream,newline_types,ignore_types) = Channel() do token_chan
-    begin
+_Lex(lexer;state=nothing) = _Lex(lexer,state)
+==#
+abstract type Lexer end
+
+set_parser_state!(l::Lexer) = nothing
+
+# The lex function creates a channel which is iterated over to get the
+# tokens
+lex(l::Lexer,stream,newline_types,ignore_types) = Channel() do token_chan
         newline_types = Set(newline_types)
         ignore_types = Set(ignore_types)
 
-        line_ctr = LineCounter()
-        while line_ctr.char_pos < length(stream)
-            not_found = true
-            for (mre, type_from_index) in l.lexer.mres
-                m = match(mre,streamline_ctr.char_pos)
-                if m == nothing
-                    continue
-                end
-
-                t = nothing
-                value = m.match
-                type_ = type_from_index[m.offsets[1]] #is offset correct here?
-                if type_ not in ignore_types
-                    t = Token(type_,value,line_ctr.char_pos,line_ctr.line,line_ctr.column)
-                    if t.type_ in keys(l.lexer.callback)
-                        t = l.lexer.callback[t.type_](t)
-                    end
-                    put!(token_chan,t)
-                else
-                    if type_ in keys(l.lexer.callback)
-                        t = Token(type_, value, line_ctr.char_pos, line_ctr.line, line_ctr.column)
-                        lexer.callback[type_](t)
-                    end
-                end
-                feed(line_ctr,value,test_newline = type_ in newline_types)
-                if t != nothing
-                    t.end_line = line_ctr.line
-                    t.end_column = line_ctr.column
-                end
-                not_found = false
-                break
+    line_ctr = LineCounter()
+    mres,names_by_idx = l.mres
+    while line_ctr.char_pos < length(stream)
+        println("Now at char pos $(line_ctr.char_pos)")
+        m = Base.match(mres,stream,line_ctr.char_pos)
+        if m == nothing
+            throw(UnexpectedCharacters(stream,line_ctr.char_pos, line_ctr.line,
+                                       line_ctr.column))
+        end
+        t = nothing
+        value = m.match
+        match_num = min([i for (i,v) in enumerate(m.captures) if !isnothing(v)]...)
+        type_ = names_by_idx[match_num]
+        println("Matched $type_ : '$value'")
+        if !(type_ in ignore_types)
+            t = Token(type_,value,pos_in_stream=line_ctr.char_pos,line=line_ctr.line,column=line_ctr.column)
+            if t.type_ in collect(keys(l.callback))
+                t = l.callback[t.type_](t)
             end
-            if not_found
-                throw(UnexpectedCharacters(stream,line_ctr.char_pos, line_ctr.line,
-                                           line_ctr.column,state=l.state))
-            # Python has an else clause here that is executed if the for
-            # statement finishes normally (not via a break).
-                # It raises an error if the stream is not exhausted
+            put!(token_chan,t)
+        else
+            if type_ in collect(keys(l.callback))
+                t = Token(type_, value, pos_in_stream=line_ctr.char_pos, line=line_ctr.line, column=line_ctr.column)
+                l.callback[type_](t)
             end
+        end
+        feed!(line_ctr,value,test_newline = type_ in newline_types)
+        if t != nothing
+            t.end_line = line_ctr.line
+            t.end_column = line_ctr.column
         end
     end
 end
@@ -182,7 +198,7 @@ unless_callback(mres) = begin
 end
 
 _create_unless(terminals) = begin
-    tokens_by_type = classify(terminals,keys = t->typeof(t.pattern))
+    tokens_by_type = classify(terminals,key = t->typeof(t.pattern))
     embedded_strs = Set()
     callback = Dict()
     for retok in get(tokens_by_type,PatternRE,[])
@@ -194,13 +210,13 @@ _create_unless(terminals) = begin
             s = strtok.pattern.value
             m = match(to_regexp(retok.pattern),s)
             if m && m.match == s
-                append!(unless,strtok)
+                push!(unless,strtok)
                 if get_flags(strtok.pattern) <= get_flags(retok.pattern)
                     push!(embedded_strs,strtok)
                 end
             end
         end
-        if unless
+        if !isempty(unless)
             callback[retok.name] = unless_callback(build_mres(unless, match_whole = true))
         end
     end
@@ -210,17 +226,20 @@ end
 
 # The python version is convoluted due to the maximum number of groups of 100
 # Don't know yet if this applies to Julia
-build_mres(terminals, max_size; match_whole=true) = begin
+build_mres(terminals; match_whole=true) = begin
     postfix = ""
-    if match_whole postfix = "$" end
-    mres = Regex(join("|" , ["(?P<$(t.name)>%$(to_regexp(t.pattern)*postfix)" for t in terminals]))
+    # if match_whole postfix = "\$" end
+    mres = Regex(join(["(?P<$(t.name)>$(to_regexp(t.pattern)*postfix))" for t in terminals],"|"))
+    names_by_idx = Base.PCRE.capture_names(mres.regex)
+    # println("All regexes now $mres")
+    return mres,names_by_idx
 end
 
 _regexp_has_newline(r) = begin
-    return "\n" in r || "\\n" in r || "[^" in r or ("(?s" in r && '.' in r)
+    return occursin("\n", r) || occursin("\\n", r) || occursin("[^", r) ||
+        (occursin("(?s", r) && occursin('.', r))
 end
 
-abstract type Lexer end
 
 struct TraditionalLexer <: Lexer
     newline_types
@@ -245,13 +264,13 @@ TraditionalLexer(terminals,ignore=(),user_callbacks=Dict()) = begin
     @assert Set(ignore) <= Set([t.name for t in terminals])
     
     newline_types = [t.name for t in terminals if _regexp_has_newline(to_regexp(t.pattern))]
-    sort!(terminals, by= x -> (-x.priority, -max_width(x),-length(x.pattern.value),x.name))
-    terminals, callback = _create_unless(tokens)
+    sort!(terminals, by= x -> (-x.priority, -max_width(x.pattern),-length(x.pattern.value),x.name))
+    terminals, callback = _create_unless(terminals)
     for (type_,f) in user_callbacks
-        @assert !(type_ in keys(callback))
+        @assert !(type_ in collect(keys(callback)))
         callback[type_] = f
     end
-    TraditionalLexer(newline_types,ignore_types,callback,terminals,build_mres(tokens))
+    TraditionalLexer(newline_types,ignore,callback,terminals,build_mres(terminals))
 end
 
 lex(tl::TraditionalLexer,stream) = begin
@@ -267,7 +286,7 @@ end
 ContextualLexer(terminals,states;ignore=(),always_accept=(),user_callbacks=Dict()) = begin
     tokens_by_name = Dict()
     for t in terminals
-        @assert !(t.name in keys(tokens_by_name)) 
+        @assert !(t.name in collect(keys(tokens_by_name))) 
         tokens_by_name[t.name] = t
     end
 
@@ -289,7 +308,23 @@ ContextualLexer(terminals,states;ignore=(),always_accept=(),user_callbacks=Dict(
     ContextualLexer(lexers,root_lexer,nothing)
 end
 
-set_parser_state!(cl,state) = cl.parser_state = state
+# This is a method in Python designed to capture the lexer it belongs to
+# in a closure, so the lexer doesn't have to be followed explicitly within
+# the parser
+
+set_parser_state!(cl) = function (state)
+    cl.parser_state = state
+end
+
+#== 
+
+TODO. The contextual lexer switches lexers depending on the
+parse state. To do this it creates a separate Lexer object
+based on the current state and then returns a token. After
+returning this token, it switches state ready to lex the
+next token. This is why the _Lex object exists in Python:
+it has mutable lexer and state fields.
+
 
 lex(cl::ContextualLexer,stream) = Channel() do lexchan
     begin
@@ -303,3 +338,4 @@ lex(cl::ContextualLexer,stream) = Channel() do lexchan
         end
     end
 end
+==#

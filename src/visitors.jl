@@ -41,53 +41,62 @@ is one of the arguments and no splatting is done.
 As an example, EBNF_TO_BNF has inline declared as True. This
 means that any of the internal methods are written assuming a
 list of children is supplied.
+
+We can duplicate this with macros, if we want.
 ==#
 
 abstract type Transformer_InPlace <: Transformer end
 abstract type Transformer_InPlaceRecursive <: Transformer end
-abstract type Interpreter end
-
 
 _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
     children = new_children
     if new_children == nothing
         children = tr.children
     end
-    if have_method(tr.data)
+    if have_method(t,tr.data)
         f = tr.data
     else
-        return __default(t,tree.data,children,tree.meta)
+        return __default__(t,tr.data,children,tr._meta)
     end
-    # we do not attach properties to functions so we
-    # only handle inline for now
-    return invoke_callback(f,children)
+    if is_inline(t,f)
+        return get_method(t,f)(t,children...)
+    else
+        return get_method(t,f)(t,children)
+    end
+    
 end
 
 _transform_children(t::Transformer,children) = Channel() do chan
     for c in children
         try
             if c isa Tree
-                put!(_transform_tree(t,c))
+                put!(chan,_transform_tree(t,c))
             else
-                put!(c)
+                put!(chan,c)
             end
         catch e
-            println("Warning: discarding $e")
+            # For production, drop the error...
+            # println("Warning: discarding $e")
+            rethrow(e)
         end
     end
 end
 
 _transform_tree(t::Transformer,tree) = begin
-    children = _transform_children(t,tree.children)
-    return _call_userfunc(t,tree,children)
+    children = collect(_transform_children(t,tree.children))
+    println("Children were $(tree.children), now $children")
+    return _call_userfunc(t,tree,new_children=children)
 end
 
 # This is overridden by subtypes
 transform(tr::Transformer,tree) = _transform_tree(tr,tree)
 
-Base.:*(t1::Transformer,t2::Transformer) = TransformerChain(t1,t2)
+Base.:*(t1::Transformer,t2::Transformer) = TransformerChain([t1,t2])
 
-__default__(tr::Transformer,data,children,meta) = Tree(data,children,meta)
+__default__(tr::Transformer,data,children,meta) = begin
+    println("Warning: calling default transformer for $data")
+    Tree(data,children,meta)
+end
 
 # Weird introspective decorator magic skipped
 
@@ -103,7 +112,18 @@ Base.:*(tc::TransformerChain,tc2::TransformerChain) = begin
     TransformerChain(new_transformers)
 end
 
-Base.:*(tc::Transformer,tc2::Transformer) = TransformerChain([tc1,tc2])
+Base.:*(tc::TransformerChain,t::Transformer) = begin
+    new_transformers = tc.transformers
+    push!(new_transformers,t)
+    TransformerChain(new_transformers)
+end
+
+transform(tc::TransformerChain,tree) = begin
+    for t in tc.transformers
+        tree = transform(t,tree)
+    end
+    return tree
+end
 
 _transform_tree(tip::Transformer_InPlace,tree) = begin
     _call_userfunc(tip,tree)
@@ -111,13 +131,13 @@ end
 
 
 _transform_tree(tipr::Transformer_InPlaceRecursive,tree) = begin
-    tree.children = _transform_children(tipr,tree.children)
+    tree.children = collect(_transform_children(tipr,tree.children))
     return _call_userfunc(tipr,tree)
 end
 
 transform(tip::Transformer_InPlace, tree) = begin
-    for subtree in iter_subtrees(tree)
-        subtree.children = _transform_children(tip,subtree.children)
+    for subtree in collect(iter_subtrees(tree))
+        subtree.children = collect(_transform_children(tip,subtree.children))
     end
     return _transform_tree(tip,tree)
 end
@@ -130,8 +150,8 @@ abstract type Visitor <: VisitorBase end
 abstract type Visitor_Recursive <: VisitorBase end
 
 _call_userfunc(v::VisitorBase,tree) = begin
-    if have_method(tree.data)
-        invoke_callback(tree.data,tree)
+    if have_method(v,tree.data)
+        get_method(v,tree.data)(v,tree)
     else
         __default__(v,tree)
     end
@@ -152,22 +172,23 @@ visit(v::Visitor_Recursive,tree) = begin
             visit(v,child)
         end
     end
-    if have_method(tree.data)
-        invoke_callback(tree.data,tree)
+    if have_method(v,tree.data)
+        get_method(v,tree.data)(v,tree)
     end
     return tree
 end
 
+# Interpreters do not automatically visit children
+
+abstract type Interpreter end
+
 visit(inter::Interpreter,tree) = begin
-    println("Visiting $tree")
-    println("Data is $(tree.data)")
-    if have_method(tree.data)
-        invoke_callback(tree.data,tree)
+    if have_method(inter,tree.data)
+        get_method(inter,tree.data)(inter,tree)
     else
-        println("No such method: $(tree.data)")
+        return visit_children(inter,tree)
     end
 end
-
 
 visit_children(inter::Interpreter,tree) = begin
     map(tree.children) do child
@@ -178,6 +199,3 @@ visit_children(inter::Interpreter,tree) = begin
         end
     end
 end
-
-__default__(inter::Interpreter,tree) = visit_children(inter,tree)
-

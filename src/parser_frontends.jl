@@ -26,10 +26,9 @@ lex(p::WithLexer,text) = begin
     return stream
 end
 
-parse(p::WithLexer,text,args...) = begin
+parse(p::WithLexer,text;kwargs...) = begin
     token_stream = lex(p,text)
-    sps = set_parser_state(p.lexer)
-    return parse(p.parser,token_stream, if !isnothing(sps) sps else [],args)
+    return parse(p.parser,token_stream;kwargs...)
 end
 
 mutable struct LALR_TraditionalLexer <: WithLexer
@@ -38,7 +37,7 @@ mutable struct LALR_TraditionalLexer <: WithLexer
     parser
     LALR_TraditionalLexer(lexer_conf,parser_conf) = begin
         x = new()
-        x.parser = lalr_parser.Parser(parser_conf)
+        x.parser = LALRParser(parser_conf)
         init_traditional_lexer(x,lexer_conf)
         return x
         end
@@ -50,7 +49,7 @@ mutable struct LALR_ContextualLexer <: WithLexer
     parser
     LALR_ContextualLexer(lexer_conf,parser_conf) = begin
         x = new()
-        x.parser = lalr_parser.Parser(parser_conf)
+        x.parser = LALRParser(parser_conf)
         init_contextual_lexer(x,lexer_conf)
         return x
         end
@@ -62,7 +61,7 @@ mutable struct LALR_CustomLexer <: WithLexer
     parser
     LALR_CustomLexer(lexer_cls,lexer_conf,parser_conf) = begin
         x = new()
-        x.parser = lalr_parser.Parser(parser_conf)
+        x.parser = LALRParser(parser_conf)
         x.lexer_conf = lexer_conf
         x.lexer = lexer_cls(lexer_conf)
         return x
@@ -85,13 +84,12 @@ end
 tokenize_text(text) = Channel() do token_chan
     line = 1
     col_start_pos = 1
-    for (i, ch) in enumerate(text):
+    for (i, ch) in enumerate(text)
         if '\n' == ch
-            line += ch.count('\n')
+            line += count(ch,'\n')
             col_start_pos = i + rindex(ch,'\n')
         end
         put!(token_chan, Token("CHAR", ch, line=line, column=i - col_start_pos))
-        end
     end
 end
 
@@ -115,8 +113,8 @@ match(e::Earley,term,token) = term.name == token.type_
 
 get_frontend(parser,lexer) = begin
         if parser=="lalr"
-            if lexer == nothing:
-                raise error("The LALR parser requires use of a lexer")
+            if lexer == nothing
+                error("The LALR parser requires use of a lexer")
             elseif lexer == "standard"
                 return LALR_TraditionalLexer
             elseif lexer == "contextual"

@@ -6,55 +6,55 @@
 # Adapted to Julia by James Hester (2019)
 # Email : james.r.hester@gmail.com
 
-struct Parser
+struct LALRParser
     _parse_table
     parser_conf
     parser
-    parse
 end
 
-Parser(parser_conf;debug=false) = begin
+LALRParser(parser_conf;debug=false) = begin
     @assert all([r.options == nothing || r.options.priority == nothing for r in parser_conf.rules])
     analysis = LALR_Analyzer(parser_conf,debug=debug)
-    analysis.compute_lookahead()
-    callbacks = Dict([("rule", get(parser_conf.callback,
-                                   if rule.alias != nothing else rule.origin end,
+    compute_lookahead!(analysis)
+    callbacks = Dict([(rule => get(parser_conf.callback,
+                                 if rule.alias != nothing
+                                 rule.alias
+                                 else rule.origin
+                                 end,
                                    nothing)
                        ) for rule in parser_conf.rules])
-    parser = _Parser(analysis.parse_table,callbacks)
-    Parser(analysis.parse_table,parser_conf,parser,parser.parse)
+    parser = _LALRParser(analysis.parse_table,callbacks)
+    LALRParser(analysis.parse_table,parser_conf,parser)
 end
 
-struct _Parser
+parse(l::LALRParser,args...;kwargs...) = parse(l.parser,args...;kwargs...)
+
+struct _LALRParser
     states
     start_state
     end_state
     callbacks
 end
 
-_Parser(parse_table,callbacks) = begin
-    _Parser(parse_table.states,parse_table.start_state,parse_table.end_state,callbacks)
+_LALRParser(parse_table,callbacks) = begin
+    _LALRParser(parse_table.states,parse_table.start_state,parse_table.end_state,callbacks)
 end
 
-parse(p::_Parser,seq;set_state = nothing, debug=false) = begin
+parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
     i = 0
     token = nothing
 #    stream = iter(seq)   ####
     states = p.states
 
+    #println("All known keys:")
+    #for k in keys(p.callbacks)
+    #    println("$k")
+    #end
     state_stack = [p.start_state]
     value_stack = []
 
-    if set_state!=nothing set_state(p.start_state) end
+    if set_state != nothing set_state(p.start_state) end
 
-    print_state(state_element) = begin
-        if hasproperty(state_element,:pretty)
-            return state_element.pretty()
-        else
-            return String(state_element)
-        end
-    end
-    
     get_action(token) = begin
         state = state_stack[end]
         try
@@ -70,9 +70,10 @@ parse(p::_Parser,seq;set_state = nothing, debug=false) = begin
     end
     
     reduce(rule) = begin
+        #println("Reducing according to $rule")
         size = length(rule.expansion)
         if size>0
-            s = value_stack[1:end-size]
+            s = value_stack[end-size+1:end]
             state_stack = state_stack[1:end-size]
             value_stack = value_stack[1:end-size]
         else
@@ -81,7 +82,8 @@ parse(p::_Parser,seq;set_state = nothing, debug=false) = begin
         
         value = p.callbacks[rule](s)
 
-        _action, new_state = states[state_stack[end-1]][rule.origin.name]
+        #println("Callback for $rule executed to obtain value $value")
+        _action, new_state = states[state_stack[end]][rule.origin.name]
         @assert _action == Shift
         push!(state_stack,new_state)
         push!(value_stack,value)
@@ -95,38 +97,35 @@ parse(p::_Parser,seq;set_state = nothing, debug=false) = begin
             
             if action == Shift
                 if debug
-                    println("Seen $(token.type),\n shifting to state $arg")
+                    println("Seen $(token.type_),\n shifting to state $arg")
                 end
-                append!(state_stack,arg)
-                append!(value_stack,token)
+                push!(state_stack,arg)
+                push!(value_stack,token)
                 if set_state != nothing
                     set_state(arg)
                 end
                 break # next token
             else
                 if debug
-                    println("Seen $(token.type),\n reducing ")
+                    println("Seen $(token.type_),\n reducing with $arg")
                 end
                 reduce(arg)
                 if debug
-                    print("Reduced to \n $(state_stack[end])")
-                    pretty = [print_state(d) for d in value_stack]
-                    print("Stack:")
-                    for p in pretty
-                        print(p)
-                    end
+                    println("Reduced to \n $(state_stack[end])")
+                    println("Stack: $value_stack")
                 end
             end
         end
     end
     
         
-    token = if token != nothing new_borrow_pos("$END","",token) else Token("$END","",0,1,1) end
+    token = if token != nothing new_borrow_pos("\$END","",token) else Token("\$END","",pos_in_stream=1,line=1,column=1) end
     while true
         _action, arg = get_action(token)
         if _action == Shift
             @assert arg == p.end_state
-            val ,= value_stack
+            val = value_stack[1]
+            #println("Parsing done: returning $val")
             return val
         else
             reduce(arg)
