@@ -59,8 +59,7 @@ struct Lark
     rules
     ignore_tokens
     lexer_conf
-    parser_class
-    _parse_tree_builder
+    parser
 end
 
 Lark(grammar::IOStream;options...) = begin
@@ -117,17 +116,18 @@ Lark(grammar::String,options,source,cache_file) = begin
     elseif lexer != nothing
         lexer = TraditionalLexer(lexer_conf.tokens,lexer_conf.ignore,lexer_conf.callbacks)
     end
-    Lark(options,source,grammar,terminals,rules,ignore_tokens,lexer_conf,parser_class,
-         _parse_tree_builder)
+    Lark(options,source,grammar,terminals,rules,ignore_tokens,lexer_conf,parser)
 end
 
 _build_parser(options,rules,lexer_conf) = begin
     parser_class = get_frontend(options["parser"],options["lexer"])
-    _parse_tree_builder = ParseTreeBuilder(rules,options["propagate_positions"],
-                                           options["keep_all_tokens"],options["parser"] != "lalr")
-    callback = create_callback(_parse_tree_builder,options["transformer"])
+    _parse_tree_builder = ParseTreeBuilder(rules,
+                                           propagate_positions = options["propagate_positions"],
+                                           keep_all_tokens=options["keep_all_tokens"],
+                                           ambiguous = options["parser"] != "lalr")
+    callback = create_callback(_parse_tree_builder,transformer=options["transformer"])
     parser_conf = ParserConf(rules,callback,options["start"])
-    return parser_class(lexer_conf,parser_conf,options)
+    return parser_class(lexer_conf,parser_conf,options=options)
 end
 
 open(grammar_filename;rel_to=nothing,options...) = begin
@@ -150,7 +150,7 @@ lex(l::Lark, text) = begin
     return stream
 end
 
-parse(l::Lark,text,args...) = begin
-    parse(l.parser,text,args...)
+parse(l::Lark,text) = begin
+    parse(l.parser,text)
 end
 

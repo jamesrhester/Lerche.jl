@@ -131,6 +131,11 @@ compute_lookahead!(l::LALR_Analyzer) = begin
         end
 
         l.states[state] = Dict((k.name=>v[1]) for (k,v) in lookahead)
+        println("\nDecisions for $state")
+        for (k,v) in l.states[state]
+            println("$k : $v")
+        end
+        
 
     end   #of step function
 

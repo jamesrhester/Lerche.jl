@@ -163,7 +163,7 @@ create_callback(ptb::ParseTreeBuilder;transformer=nothing) = begin
     callback = Dict()
     i = 0
     for (rule,wrapper_chain) in ptb.rule_builders
-        println("Rule: $(rule.origin)")
+        #println("Rule: $(rule.origin)")
         internal_callback_name = "_cb$(i)_$(rule.origin)"
         i = i+1
         # Now find the actual transformer function ...
@@ -179,7 +179,6 @@ create_callback(ptb::ParseTreeBuilder;transformer=nothing) = begin
                 println("Rule $rule has a nothing in the wrapper!!")
                 @assert !isnothing(w)
             end
-            println("   Wrapper: $w")
             f = w(f)  #ExpandSingleChild, maybe_create_child_filter,propagate positions
         end
         if internal_callback_name in collect(keys(callback))

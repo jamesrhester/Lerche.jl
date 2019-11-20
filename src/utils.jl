@@ -86,7 +86,8 @@ end
 
 ## Partial function
 
-partial(f,a...) = (b...) -> f(a...,b...)
+partial(f,a...) = (b...) -> return f(a...,b...)
+
 
 ## Helpers for constructing subtypes with methods named after rules
 

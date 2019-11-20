@@ -5,17 +5,21 @@ abstract type WithLexer end
 
 init_traditional_lexer(p::WithLexer,lexer_conf) = begin
     p.lexer_conf = lexer_conf
-    p.lexer = TraditionalLexer(lexer_conf.tokens,lexer_conf.ignore,lexer_conf.callbacks)
+    p.lexer = TraditionalLexer(lexer_conf.tokens,ignore=lexer_conf.ignore,user_callbacks=lexer_conf.callbacks)
 end
 
-init_contextual_lexer(p::WithLexer,lexer_conf,parser_conf) = begin
+init_contextual_lexer(p::WithLexer,lexer_conf) = begin
     p.lexer_conf = lexer_conf
     states = Dict(idx=>collect(keys(t)) for (idx,t) in p.parser._parse_table.states)
-    always_accept = if lexer_conf.postlex lexer_conf.postlex.always_accept else nothing end
+    always_accept = if !isnothing(lexer_conf.postlex)
+        lexer_conf.postlex.always_accept
+    else
+        ()
+    end
     p.lexer = ContextualLexer(lexer_conf.tokens,states,
-                              lexer_conf.ignore,
-                              always_accept,
-                              lexer_conf.callbacks)
+                              ignore=lexer_conf.ignore,
+                              always_accept=always_accept,
+                              user_callbacks=lexer_conf.callbacks)
 end
 
 lex(p::WithLexer,text) = begin
@@ -26,18 +30,24 @@ lex(p::WithLexer,text) = begin
     return stream
 end
 
-parse(p::WithLexer,text;kwargs...) = begin
+parse(p::WithLexer,text) = begin
+    change_lexer_state = partial(set_parser_state!,p.lexer)
+    # Set the start state before we start lexing, otherwise the
+    # contextual lexer will try to execute up to providing the first token
+    # and won't have a lexer to call!
+    change_lexer_state(p.parser.parser.start_state)
     token_stream = lex(p,text)
-    return parse(p.parser,token_stream;kwargs...)
+    return parse(p.parser,token_stream,set_state=change_lexer_state)
 end
 
 mutable struct LALR_TraditionalLexer <: WithLexer
     lexer_conf
     lexer
     parser
-    LALR_TraditionalLexer(lexer_conf,parser_conf) = begin
+    LALR_TraditionalLexer(lexer_conf,parser_conf;options=nothing) = begin
+        if !isnothing(options) debug = options["debug"] else debug = false end
         x = new()
-        x.parser = LALRParser(parser_conf)
+        x.parser = LALRParser(parser_conf,debug=debug)
         init_traditional_lexer(x,lexer_conf)
         return x
         end
@@ -47,9 +57,10 @@ mutable struct LALR_ContextualLexer <: WithLexer
     lexer_conf
     lexer
     parser
-    LALR_ContextualLexer(lexer_conf,parser_conf) = begin
+    LALR_ContextualLexer(lexer_conf,parser_conf;options=nothing) = begin
+        if !isnothing(options) debug = options["debug"] else debug = false end
         x = new()
-        x.parser = LALRParser(parser_conf)
+        x.parser = LALRParser(parser_conf,debug=debug)
         init_contextual_lexer(x,lexer_conf)
         return x
         end

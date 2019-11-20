@@ -53,15 +53,20 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
     state_stack = [p.start_state]
     value_stack = []
 
-    if set_state != nothing set_state(p.start_state) end
-
+    if set_state != nothing
+        println("Setting parser state to $(p.start_state)")
+        set_state(p.start_state)
+    else
+        println("No way to set state, skipping")
+    end
+    
     get_action(token) = begin
         state = state_stack[end]
         try
             return states[state][token.type_]
         catch e
             if e isa KeyError
-                expected = [s for s in keys(states[state]) if isuppercase(s)]
+                expected = [s for s in keys(states[state]) if all(x->isuppercase(x),s)]
                 throw(UnexpectedToken(token, expected, state=state))  #
             else
                 rethrow(e)
@@ -91,6 +96,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
 
     # Main LALR-parser loop
     for token in seq
+
         while true
             action, arg = get_action(token)
             @assert arg != p.end_state
@@ -102,6 +108,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
                 push!(state_stack,arg)
                 push!(value_stack,token)
                 if set_state != nothing
+                    println("Setting state to $arg")
                     set_state(arg)
                 end
                 break # next token

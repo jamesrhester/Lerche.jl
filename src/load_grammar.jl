@@ -2,7 +2,7 @@ const EXT = ".lark"
 
 const _RE_FLAGS = "imslux"
 
-is_terminal(sym) = isuppercase(sym)
+is_terminal(sym) = isupper(sym)
 
 const _TERMINAL_NAMES = Dict(
     "." => "DOT",
@@ -477,9 +477,9 @@ compile(g::Grammar) = begin
     compiled_rules = []
     for (name, tree, options) in rules
         visit(simplify_rule,tree)
-        println("Tree after simplification:\n$tree")
+        #println("Tree after simplification:\n$tree")
         expansions = transform(rule_tree_to_text,tree)
-        println("Tree after expansions:\n$tree, returned $expansions")
+        #println("Tree after expansions:\n$tree, returned $expansions")
         for (expansion, alias) in expansions
             if alias != nothing && first(name) =='_'
                 throw(GrammarError("Rule $name is marked for expansion (it starts with an underscore) and isn't allowed to have aliases (alias=$alias)"))
@@ -586,10 +586,6 @@ GrammarLoader() = begin
     end
     ==#
     callback = create_callback(ParseTreeBuilder(rules))
-    println("All keys for calling back:")
-    for k in keys(callback)
-        println("$k")
-    end
     lexer_conf = LexerConf(terminals, ignore=["WS", "COMMENT"])
 
     parser_conf = ParserConf(rules, callback, "start")
@@ -600,7 +596,7 @@ end
 load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
     try
         parsetree = parse(gl.parser,grammar_text*"\n")
-        println("Original parse tree:\n$parsetree")
+        #println("Original parse tree:\n$parsetree")
         tree = transform(gl.canonize_tree,parse(gl.parser,grammar_text*"\n") )
     catch e
         if e isa UnexpectedCharacters
@@ -643,7 +639,7 @@ load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
     term_defs = [(name.value, (t, int(p))) for (name, p, t) in term_defs]
     rule_defs = [options_from_rule(x[1],x[2:end]...) for x in rule_defs]
 
-    println("Check: term_defs $term_defs\nrule_defs $rule_defs")
+    #println("Check: term_defs $term_defs\nrule_defs $rule_defs")
     
     # Execute statements
     ignore = []
@@ -765,7 +761,7 @@ load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
         push!(rule_names,name)
     end
 
-    println("Rule names: $rule_names")
+    #println("Rule names: $rule_names")
 
     for (name, expansions, _o) in rules
         used_symbols = Set([t for x in find_data(expansions,"expansion")

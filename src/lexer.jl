@@ -131,22 +131,23 @@ mutable struct _Lex
     state
 end
 
-
 _Lex(lexer;state=nothing) = _Lex(lexer,state)
 ==#
+
 abstract type Lexer end
 
-set_parser_state!(l::Lexer) = nothing
+set_parser_state!(l::Lexer,state) = nothing
 
 # The lex function creates a channel which is iterated over to get the
 # tokens
-lex(l::Lexer,stream,newline_types,ignore_types) = Channel() do token_chan
+lex(l::Lexer,stream::String,newline_types,ignore_types) = Channel() do token_chan
         newline_types = Set(newline_types)
         ignore_types = Set(ignore_types)
 
     line_ctr = LineCounter()
     mres,names_by_idx = l.mres
-    while line_ctr.char_pos < length(stream)
+    println("Lex primed with /$stream/")
+    while line_ctr.char_pos <= length(stream)
         println("Now at char pos $(line_ctr.char_pos)")
         m = Base.match(mres,stream,line_ctr.char_pos)
         if m == nothing
@@ -249,7 +250,7 @@ struct TraditionalLexer <: Lexer
     mres
 end
 
-TraditionalLexer(terminals,ignore=(),user_callbacks=Dict()) = begin
+TraditionalLexer(terminals;ignore=(),user_callbacks=Dict()) = begin
     @assert all(t -> typeof(t)==TerminalDef, terminals)
     for t in terminals
         try
@@ -273,13 +274,13 @@ TraditionalLexer(terminals,ignore=(),user_callbacks=Dict()) = begin
     TraditionalLexer(newline_types,ignore,callback,terminals,build_mres(terminals))
 end
 
-lex(tl::TraditionalLexer,stream) = begin
+lex(tl::TraditionalLexer,stream::String) = begin
     lex(tl,stream,tl.newline_types,tl.ignore_types)
 end
 
 mutable struct ContextualLexer <: Lexer
-    lexers
-    root_lexer
+    lexers::Dict{Any,TraditionalLexer}
+    root_lexer::TraditionalLexer
     parser_state
 end
 
@@ -292,19 +293,20 @@ ContextualLexer(terminals,states;ignore=(),always_accept=(),user_callbacks=Dict(
 
     lexer_by_tokens = Dict()
     lexers = Dict()
+    lexer = missing  #define in scope
     for (state,accepts) in states
         key = Set(accepts)
         try
             lexer = lexer_by_tokens[key]
         catch KeyError
             accepts = union( Set(accepts), ignore, always_accept)
-            state_tokens = [tokens_by_name[n] for n in accepts if (n != nothing && n in tokens_by_name)]
+            state_tokens = [tokens_by_name[n] for n in accepts if (n != nothing && n in keys(tokens_by_name))]
             lexer = TraditionalLexer(state_tokens, ignore=ignore, user_callbacks=user_callbacks)
             lexer_by_tokens[key] = lexer
         end
         lexers[state] = lexer
     end
-    root_lexer = TraditionalLexer(tokens,ignore=ignore,user_callbacks=user_callbacks)
+    root_lexer = TraditionalLexer(terminals,ignore=ignore,user_callbacks=user_callbacks)
     ContextualLexer(lexers,root_lexer,nothing)
 end
 
@@ -312,7 +314,7 @@ end
 # in a closure, so the lexer doesn't have to be followed explicitly within
 # the parser
 
-set_parser_state!(cl) = function (state)
+set_parser_state!(cl::ContextualLexer,state) = begin
     cl.parser_state = state
 end
 
@@ -323,19 +325,27 @@ parse state. To do this it creates a separate Lexer object
 based on the current state and then returns a token. After
 returning this token, it switches state ready to lex the
 next token. This is why the _Lex object exists in Python:
-it has mutable lexer and state fields.
+it has mutable lexer and state fields. The Channel has only
+one entry so that the lexer has to wait until the parser
+has processed the token before deciding on which lexer to
+use next.
 
+==#
 
-lex(cl::ContextualLexer,stream) = Channel() do lexchan
+lex(cl::ContextualLexer,stream) = Channel(csize=0) do lexchan
     begin
-        l = _Lex(cl.lexers[cl.parser_state],cl.parser_state)
-        for x in lex(l,stream,cl.root_lexer.newline_types,cl.root_lexer.ignore_types)
-            put!(lexchan,x)
-            # TODO: are we really allowed to mess with our lexer settings within the
-            # iteration??
-            l.lexer = cl.lexer[c.parser_state]
-            l.state = cl.parser_state
+        if isnothing(cl.parser_state)
+            error("The parser state should not be nothing")
+        end
+        l = [cl.lexers[cl.parser_state],cl.parser_state]
+        for x in lex(l[1],stream,cl.root_lexer.newline_types,cl.root_lexer.ignore_types)
+            println("Token: $x")
+            put!(lexchan,x)  #will block until the value is taken
+            # we don't want this to be set until the parsing has happened!
+            println("Now setting the lexer state to $(cl.parser_state)")
+            l[1] = cl.lexers[cl.parser_state]  #
+            l[2] = cl.parser_state
         end
     end
 end
-==#
+
