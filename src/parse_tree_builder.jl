@@ -22,17 +22,22 @@ ExpandSingleChild(node_builder::Function) = function(c)
 end
 
 PropagatePositions(node_builder::Function) = function(children)
+    #println("Propagating positions")
     res = node_builder(children)
+    #println("Res is $res")
     if res isa Tree
         meta(res).empty = true
         for c in children
+            #println("Child: $c")
             if c isa Tree && c.children != [] && !(meta(c).empty)
+                #println("Setting values from $c: $(meta(c))")
                 meta(res).line = meta(c).line
                 meta(res).column = meta(c).column
                 meta(res).start_pos = meta(c).start_pos
                 meta(res).empty = false
                 break
             elseif c isa Token
+                #println("Setting token values from $c")
                 meta(res).line = c.line
                 meta(res).column = c.column
                 meta(res).start_pos = c.pos_in_stream
@@ -43,12 +48,14 @@ PropagatePositions(node_builder::Function) = function(children)
 
         for c in reverse(children)
             if c isa Tree && c.children != [] && !(meta(c).empty)
+                #println("Setting end values from $c to $(meta(c))")
                 meta(res).end_line = meta(c).end_line
                 meta(res).end_column = meta(c).end_column
                 meta(res).end_pos = meta(c).end_pos
                 meta(res).empty = false
                 break
             elseif c isa Token
+                #println("Setting token end values from $c")
                 meta(res).end_line = c.end_line
                 meta(res).end_column = c.end_column
                 meta(res).end_pos = c.pos_in_stream + length(c.value)
@@ -60,6 +67,7 @@ PropagatePositions(node_builder::Function) = function(children)
 end
 
 ChildFilterLALR(to_include,node_builder) = function(c)
+    println("Filtering children: $to_include")
     filtered = []
     for (i, to_expand) in to_include
             if to_expand
@@ -79,7 +87,7 @@ _should_expand(sym) = !sym.is_term && first(sym.name) == '_'
 
 maybe_create_child_filter(expansion,keep_all_tokens) = begin
     to_include = [(i,_should_expand(sym)) for (i,sym) in enumerate(expansion)
-                  if keep_all_tokens || !(sym.is_term && sym.filter_out)]
+                  if keep_all_tokens || !(sym.is_term && sym.filter_out==true)]
     if length(to_include) < length(expansion) || any([to_expand for (i,to_expand) in to_include])
         return partial(ChildFilterLALR,to_include)
     else
@@ -143,7 +151,7 @@ _init_builders(rules,all_tokens,ambiguous,propagate_positions) = Channel() do bu
                                          else false end)
         expand_single_child = if !isnothing(options) options.expand1 else false end
         wrapper_chain =
-            filter(x->x != false, [
+            filter(x-> typeof(x) != Bool, [
                 if propagate_positions PropagatePositions else false end,
                 if (expand_single_child && isnothing(rule.alias)) ExpandSingleChild else false end,
                 maybe_create_child_filter(rule.expansion, keep_all_tokens),

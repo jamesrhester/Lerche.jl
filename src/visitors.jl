@@ -84,7 +84,7 @@ end
 
 _transform_tree(t::Transformer,tree) = begin
     children = collect(_transform_children(t,tree.children))
-    println("Children were $(tree.children), now $children")
+    #println("Children were $(tree.children), now $children")
     return _call_userfunc(t,tree,new_children=children)
 end
 
@@ -94,7 +94,7 @@ transform(tr::Transformer,tree) = _transform_tree(tr,tree)
 Base.:*(t1::Transformer,t2::Transformer) = TransformerChain([t1,t2])
 
 __default__(tr::Transformer,data,children,meta) = begin
-    println("Warning: calling default transformer for $data")
+    #println("Warning: calling default transformer for $data")
     Tree(data,children,meta)
 end
 

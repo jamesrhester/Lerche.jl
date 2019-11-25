@@ -2,15 +2,18 @@
 # the extra information that I could find is here
 mutable struct Meta
     rule
-    line
-    column
-    end_line
-    end_column
+    line::Int64
+    column::Int64
+    end_line::Int64
+    end_column::Int64
+    start_pos::Int64
+    end_pos::Int64
+    empty::Bool
     Meta() = new()
 end
 
-# We do not use slotted trees as there is no efficiency win
-# Is there any other use for them?
+# Note that a Python slotted tree is just a tree with
+# restricted possible fields, like a Julia struct.
 
 mutable struct Tree
     data
@@ -45,14 +48,21 @@ pretty(t::Tree; indent_str = "  ") = join(pretty(t,0, indent_str),"")
 #Base.show(io::IO,t::Tree) = println(io,pretty(t))
 Base.show(io::IO,t::Tree) = println(io,"Tree($(t.data), $(t.children))")
 """
-Expand (inline) children at the given indices. This may not work as we
-can't change array sizes??
+Expand children at the given indices. Rewritten for Julia as we
+can't expand inline.
 """
-expand_kids_by_index(t::Tree, indices...) = begin
-    for i in sort(indices, rev=true)
-        kid = t.children[i]
-        t.children[i:i] = kid.children
+expand_kids_by_index!(t::Tree, indices) = begin
+    #println("Expanding $t and $indices")
+    new_children = []
+    for (i,c) in enumerate(t.children)
+        if i in indices
+            append!(new_children,c.children)
+        else
+            push!(new_children,c)
+        end
     end
+    t.children = new_children
+    #println("Returning: $t")
 end
 
 Base.:(==)(t1::Tree,t2::Tree) = t1.data == t2.data && t1.children == t2.children

@@ -162,7 +162,9 @@ lex(l::Lexer,stream::String,newline_types,ignore_types) = Channel() do token_cha
         if !(type_ in ignore_types)
             t = Token(type_,value,pos_in_stream=line_ctr.char_pos,line=line_ctr.line,column=line_ctr.column)
             if t.type_ in collect(keys(l.callback))
+                println("Calling callback for $(t.type_)")
                 t = l.callback[t.type_](t)
+                println("Resulting in $t")
             end
             put!(token_chan,t)
         else
@@ -184,18 +186,19 @@ end
 #    mres
 #end
 
-# Looks like this will find tokens in the list of regexps
-unless_callback(mres) = begin
-    function (t)
-        for (mre, type_from_index) in mres
-            m = match(mre,t.value)
-            if m != nothing
-                t.type_ = type_from_index[m.offset]
-                break
-            end
-        end
-        return t
+# This checks for patterns that belong to different REs
+unless_callback(mres) = function (t)
+    println("Unless callback: $t")
+    println("mres are $mres")
+    # Note that mres is a single tuple as we are not splitting
+    # REs into 100-pattern chunks unlike Python
+    mre, type_from_index = mres
+    m = Base.match(mre,t.value)
+    if m != nothing
+        t.type_ = type_from_index[m.offset]
     end
+    println("Returning $t")
+    return t
 end
 
 _create_unless(terminals) = begin
@@ -209,8 +212,8 @@ _create_unless(terminals) = begin
                 continue
             end
             s = strtok.pattern.value
-            m = match(to_regexp(retok.pattern),s)
-            if m && m.match == s
+            m = Base.match(Regex(to_regexp(retok.pattern)),s)
+            if !isnothing(m) && m.match == s
                 push!(unless,strtok)
                 if get_flags(strtok.pattern) <= get_flags(retok.pattern)
                     push!(embedded_strs,strtok)
@@ -219,6 +222,7 @@ _create_unless(terminals) = begin
         end
         if !isempty(unless)
             callback[retok.name] = unless_callback(build_mres(unless, match_whole = true))
+            println("Will use unless callback for $(retok.name) using $unless")
         end
     end
     terminals = [t for t in terminals if !(t in embedded_strs)]
@@ -226,13 +230,15 @@ _create_unless(terminals) = begin
 end
 
 # The python version is convoluted due to the maximum number of groups of 100
-# Don't know yet if this applies to Julia
-build_mres(terminals; match_whole=true) = begin
+# Don't know yet if this applies to Julia. Match whole means that the regex
+# must match the whole expression e.g. when checking tokens for matches with
+# other things.
+build_mres(terminals;match_whole=false) = begin
     postfix = ""
-    # if match_whole postfix = "\$" end
+    if match_whole postfix = "\$" end
     mres = Regex(join(["(?P<$(t.name)>$(to_regexp(t.pattern)*postfix))" for t in terminals],"|"))
     names_by_idx = Base.PCRE.capture_names(mres.regex)
-    # println("All regexes now $mres")
+    println("All regexes now $mres")
     return mres,names_by_idx
 end
 
@@ -271,6 +277,7 @@ TraditionalLexer(terminals;ignore=(),user_callbacks=Dict()) = begin
         @assert !(type_ in collect(keys(callback)))
         callback[type_] = f
     end
+    println("Terminals: $terminals")
     TraditionalLexer(newline_types,ignore,callback,terminals,build_mres(terminals))
 end
 

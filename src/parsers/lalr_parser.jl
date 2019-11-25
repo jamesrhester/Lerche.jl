@@ -40,7 +40,7 @@ _LALRParser(parse_table,callbacks) = begin
     _LALRParser(parse_table.states,parse_table.start_state,parse_table.end_state,callbacks)
 end
 
-parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
+parse(p::_LALRParser,seq; set_state = nothing, debug=true) = begin
     i = 0
     token = nothing
 #    stream = iter(seq)   ####
@@ -75,7 +75,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
     end
     
     reduce(rule) = begin
-        #println("Reducing according to $rule")
+        println("Reducing according to $rule")
         size = length(rule.expansion)
         if size>0
             s = value_stack[end-size+1:end]
@@ -87,7 +87,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
         
         value = p.callbacks[rule](s)
 
-        #println("Callback for $rule executed to obtain value $value")
+        println("Callback for $rule executed to obtain value $value")
         _action, new_state = states[state_stack[end]][rule.origin.name]
         @assert _action == Shift
         push!(state_stack,new_state)
@@ -107,20 +107,21 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
                 end
                 push!(state_stack,arg)
                 push!(value_stack,token)
+                println("Value stack is now $value_stack")
                 if set_state != nothing
                     println("Setting state to $arg")
                     set_state(arg)
                 end
                 break # next token
             else
-                if debug
+                #if debug
                     println("Seen $(token.type_),\n reducing with $arg")
-                end
+                #end
                 reduce(arg)
-                if debug
+                #if debug
                     println("Reduced to \n $(state_stack[end])")
                     println("Stack: $value_stack")
-                end
+                #end
             end
         end
     end
@@ -128,11 +129,14 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
         
     token = if token != nothing new_borrow_pos("\$END","",token) else Token("\$END","",pos_in_stream=1,line=1,column=1) end
     while true
+        println("Final token is $token, value stack $value_stack")
         _action, arg = get_action(token)
         if _action == Shift
             @assert arg == p.end_state
+            @assert length(value_stack) == 1
+            println("Final value stack is $value_stack")
             val = value_stack[1]
-            #println("Parsing done: returning $val")
+            println("Parsing done: returning $val")
             return val
         else
             reduce(arg)

@@ -1,7 +1,7 @@
 module Lerchen
 
 export Tree,Interpreter,Transformer, visit_children, visit,transform
-export GrammarError, Lark
+export GrammarError, ParseError, UnexpectedToken, Lark
 #==
 
 Lerchen ("Lark" in German) is a port of the Python Lark package to

@@ -2,6 +2,8 @@ struct GrammarError <: Exception
     message::String
 end
 
+# These are concrete to allow messages to be attached
+# to them.
 struct ParseError <: Exception end
 struct LexError <: Exception end
 
@@ -101,7 +103,7 @@ end
 
 Base.showerror(io::IO,ut::UnexpectedToken) = begin
     message = "Unexpected token $(ut.token) at line $(ut.line), column $(ut.column).\n"
-    message *= "Expected: $(join(", ",ut.expected))"
-    println(io,message)
+    message *= "Expected: $(join(ut.expected,", "))"
+    println(message)
 end
 

@@ -175,17 +175,17 @@ end
 
 struct SimplifyRule_Visitor <: Visitor end
 
-_flatten!(srv::SimplifyRule_Visitor,tree) = begin
+_flatten!(srv::SimplifyRule_Visitor,tree::Tree) = begin
     while true
         to_expand = [i for (i,child) in enumerate(tree.children) if child isa Tree && child.data == tree.data]
         if length(to_expand) == 0 break end
-        expand_kids_by_index!(tree,to_expand...)
+        expand_kids_by_index!(tree,to_expand)
     end
 end
 
 # Changes the argument but we can't add exclamation marks or it will
 # spoil the link between rule and function
-@rule expansion(srv::SimplifyRule_Visitor,tree) = begin
+@rule expansion(srv::SimplifyRule_Visitor,tree::Tree) = begin
     _flatten!(srv,tree)
     for (i,child) in enumerate(tree.children)
         if child isa Tree && child.data == "expansions"
@@ -200,7 +200,7 @@ end
     end
 end
 
-@rule alias(srv::SimplifyRule_Visitor,tree) = begin
+@rule alias(srv::SimplifyRule_Visitor,tree::Tree) = begin
     rule,alias_name = tree.children
     if rule.data == "expansions"
         aliases = []
@@ -361,18 +361,18 @@ end
     if length(Set(i.flags for i in items)) > 1
         throw(GrammarError("Lark doesn't support joining terminals with conflicting flags!"))
     end
-    return PatternRE("(?:$(join("|",(to_regexp(i) for i in items))))",
+    return PatternRE("(?:$(join((to_regexp(i) for i in items),"")))",
                      if length(items) > 0 items[1].flags else () end)
 end
 
 @rule expansions(tttp::TerminalTreeToPattern, exps) = begin
     if length(exps) == 1
-        return items[1]
+        return exps[1]
     end
     if length(Set(i.flags for i in exps)) > 1
         throw(GrammarError("Lark doesn't support joining terminals with conflicting flags!"))
     end
-    return PatternRE("(?:$(join("|",(to_regexp(i) for i in exps))))", exps[1].flags)
+    return PatternRE("(?:$(join((to_regexp(i) for i in exps),"|")))", exps[1].flags)
 end
 
 @rule expr(tttp::TerminalTreeToPattern,args) = begin
@@ -390,7 +390,8 @@ end
     else
         @assert length(args) == 2
     end
-    return PatternRE("(?:$(to_regexp(inner)))$(inner.flags)")
+    f = PatternRE("(?:$(to_regexp(inner)))$(op.value)",inner.flags)
+    return f
 end
 
 @rule alias(tttp::TerminalTreeToPattern,t) = throw(GrammarError("Aliasing not allowed in terminals (You used -> in the wrong place)"))
@@ -442,7 +443,7 @@ compile(g::Grammar) = begin
         end
     end
     terminals = [TerminalDef(name, transform(transformer,term_tree), priority)
-                 for (name, (term_tree, priority)) in term_defs if length(term_tree)>0]
+                 for (name, (term_tree, priority)) in term_defs if term_tree!=[]]
 
     # =================
     #  Compile Rules
@@ -636,7 +637,7 @@ load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
     @assert length(defs) == 0
 
     term_defs = [if length(td)==3 td else (td[1], 1, td[2]) end for td in term_defs]
-    term_defs = [(name.value, (t, int(p))) for (name, p, t) in term_defs]
+    term_defs = [(name.value, (t, if !(typeof(p) <: Int) Base.parse(Int64,p) else p end)) for (name, p, t) in term_defs]
     rule_defs = [options_from_rule(x[1],x[2:end]...) for x in rule_defs]
 
     #println("Check: term_defs $term_defs\nrule_defs $rule_defs")
@@ -703,7 +704,7 @@ load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
 
     # Verify correctness 1
     for (name, _) in term_defs
-        if name[1:2]=="__"
+        if startswith(name,"__")
             throw(GrammarError("Names starting with double-underscore are reserved (Error at $name)"))
         end
     end
