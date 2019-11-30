@@ -40,6 +40,8 @@ _LALRParser(parse_table,callbacks) = begin
     _LALRParser(parse_table.states,parse_table.start_state,parse_table.end_state,callbacks)
 end
 
+# A change from Python Lark: set_state is a channel to send the new
+# state to.  This helps coordination.
 parse(p::_LALRParser,seq; set_state = nothing, debug=true) = begin
     i = 0
     token = nothing
@@ -54,7 +56,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=true) = begin
     value_stack = []
 
     if set_state != nothing
-        println("Setting parser state to $(p.start_state)")
+        println("$(time()): Setting parser state to $(p.start_state)")
         set_state(p.start_state)
     else
         println("No way to set state, skipping")

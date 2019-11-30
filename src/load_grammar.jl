@@ -1,5 +1,7 @@
 const EXT = ".lark"
 
+const IMPORT_PATHS = [joinpath(@__DIR__,"grammars")]
+
 const _RE_FLAGS = "imslux"
 
 is_terminal(sym) = isupper(sym)
@@ -57,7 +59,7 @@ const TERMINALS = Dict(
     "TILDE"=> "~",
     "RULE"=> "!?[_?]?[a-z][_a-z0-9]*",
     "TERMINAL"=> "_?[A-Z][_A-Z0-9]*",
-    "STRING"=> raw""""("|\\\\|[^"\n])*?"i?""",
+    "STRING"=> raw""""(\\\\"|\\\\|[^"\n])*?"i?""",
     "REGEXP"=> raw"/(?!/)(\\/|\\\\|[^/\n])*?/[" * _RE_FLAGS * "]*",
     "_NL"=> raw"(\r?\n)+\s*",
     "WS"=> raw"[ \t]+",
@@ -234,7 +236,7 @@ end
 
 struct CanonizeTree <: Transformer_InPlace end
 
-@inline_rule maybe(ct::CanonizeTree,expr) = Tree("expr",[expr, Token("OP","?",-1)])
+@inline_rule maybe(ct::CanonizeTree,expr) = Tree("expr",[expr, Token("OP","?",pos_in_stream=-1)])
 
 @inline_rule tokenmods(ct::CanonizeTree,args...) = begin
     if length(args) == 1
@@ -247,7 +249,7 @@ end
 mutable struct PrepareAnonTerminals <: Transformer_InPlace
     terminals
     term_set::Set
-    term_reverse::Dict
+    term_reverse::Dict{Pattern,TerminalDef}
     i
 end
 
@@ -288,7 +290,7 @@ PrepareAnonTerminals(terminals) = PrepareAnonTerminals(terminals,Set([td.name fo
         term_name = "__ANON_$(panon.i)"
         panon.i += 1
     end
-    
+
     if !(term_name in panon.term_set)
         @assert !(p in keys(panon.term_reverse))
         push!(panon.term_set,term_name)
@@ -311,7 +313,29 @@ _rfind(s,choices) = begin
     return biggest
 end
 
+#==
+Fixing escaping.
 
+The python code iterates over each character of the supplied string,
+appending it to the output string.
+
+If that character is a backslash, the next character is also added. If
+this second character is also a backslash, 2 backslashes are inserted
+before it. If the second letter is anything other than 'unftr', only a
+single further backslash is inserted.
+
+So a double backslash on input becomes 4 on output. An unrecognised
+backslash combination becomes double backslash - character. A
+recognised combination remains as-is.
+
+Following these shenanigans, any quotes are escaped and the string
+is evaluated as a unicode string literal.
+
+After calling this routine in _literal_to_pattern, double backslashes
+are removed for strings, but remain for regular expressions.
+
+Julia does not need to eval the string.
+==#
 _fix_escaping(s) = error("Cannot fix escaping")
 
 ## TODO write this properly
@@ -496,8 +520,81 @@ compile(g::Grammar) = begin
     return terminals, compiled_rules, g.ignore
 end
 
-# TODO: port over importation of grammars
+const _imported_grammars = Dict()
 
+import_grammar(grammar_path;base_paths=[]) = begin
+    println("Importing grammar from $grammar_path")
+    if !(grammar_path in keys(_imported_grammars))
+        import_paths = copy(base_paths)
+        append!(import_paths,IMPORT_PATHS)
+        for import_path in import_paths
+    text = ""
+            println("Trying $import_path (out of $IMPORT_PATHS)")
+            try
+                Base.open(joinpath(import_path,grammar_path)) do f
+                    text = read(f,String)
+                end
+            catch e
+                if !(e isa SystemError)
+                    rethrow(e)
+                end
+            end
+            grammar = load_grammar(text,grammar_name=grammar_path)
+            _imported_grammars[grammar_path] = grammar
+            break
+        end
+    end
+    return _imported_grammars[grammar_path]
+end
+    
+import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
+    imported_terms = Dict(grammar.term_defs)
+    imported_rules = Dict(n => (n,t,o) for (n,t,o) in grammar.rule_defs)
+    term_defs = []
+    rule_defs = []
+
+    rule_dependencies(symbol) = begin
+        println("Checking $symbol")
+        if symbol.type_ != "RULE"
+            return []
+        end
+        _, tree, _ = imported_rules[symbol]
+        println("Scanning $tree")
+        return scan_values(tree, x-> x.type_ in ("RULE","TERMINAL"))
+    end
+
+    get_namespace_name(name) = begin
+        try
+            return aliases[name].value
+        catch e
+            if e isa KeyError
+                return "$namespace.$name"
+            end
+            rethrow(e)
+        end
+    end
+
+    to_import = Array(collect(bfs(keys(aliases), rule_dependencies)))
+    for symbol in to_import
+        if symbol.type_ == "TERMINAL"
+            push!(term_defs,[get_namespace_name(symbol), imported_terms[symbol]])
+        else
+            @assert symbol.type == "RULE"
+            rule = imported_rules[symbol]
+            for t in iter_subtrees(rule[2])
+                for (i, c) in enumerate(t.children)
+                    if c isa Token && c.type_ in ("RULE", "TERMINAL")
+                        t.children[i] = Token(c.type_, get_namespace_name(c))
+                    end
+                end
+            end
+            push!(rule_defs,(get_namespace_name(symbol), rule[2], rule[3]))
+        end
+    end
+    return term_defs, rule_defs
+end
+
+    
 resolve_term_references(term_defs) = begin
     token_dict = Dict(k=>t for (k,(t,_p)) in term_defs)
     @assert length(token_dict) == length(term_defs) "Same name defined twice?"
@@ -594,7 +691,7 @@ GrammarLoader() = begin
 end
 
 "Parse grammar_text, verify, and create Grammar object. Display nice messages on error."
-load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
+load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
     try
         parsetree = parse(gl.parser,grammar_text*"\n")
         #println("Original parse tree:\n$parsetree")
@@ -636,8 +733,8 @@ load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
     statements = pop!(defs,"statement", [])
     @assert length(defs) == 0
 
-    term_defs = [if length(td)==3 td else (td[1], 1, td[2]) end for td in term_defs]
-    term_defs = [(name.value, (t, if !(typeof(p) <: Int) Base.parse(Int64,p) else p end)) for (name, p, t) in term_defs]
+    term_defs = [if length(td)==3 td else [td[1], 1, td[2]] end for td in term_defs]
+    term_defs = [[name.value, [t, if !(typeof(p) <: Int) Base.parse(Int64,p) else p end]] for (name, p, t) in term_defs]
     rule_defs = [options_from_rule(x[1],x[2:end]...) for x in rule_defs]
 
     #println("Check: term_defs $term_defs\nrule_defs $rule_defs")
@@ -662,7 +759,7 @@ load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
                 names = arg1.children
                 aliases = names  # Can't have aliased multi import, so all aliases will be the same as names
             else  # Single import
-                dotted_path = path_node.children[:end-1]
+                dotted_path = path_node.children[1:end-1]
                 names = [path_node.children[end]]  # Get name from dotted path
                 aliases = if arg1 != nothing
                     [arg1]
@@ -670,8 +767,8 @@ load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
                     names
                 end # Aliases if exist
             end
-            
-            grammar_path = joinpath(dotted_path...) * EXT
+
+            grammar_path = joinpath([x.value for x in dotted_path]...) * EXT
 
             if path_node.data == "import_lib"  # Import from library
                 g = import_grammar(grammar_path)
@@ -687,8 +784,10 @@ load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
             end
             
             aliases_dict = Dict(zip(names, aliases))
-            new_td, new_rd = import_from_grammar_into_namespace(g, join(".",dotted_path), aliases_dict)
+            new_td, new_rd = import_from_grammar_into_namespace(g, join(dotted_path,"."), aliases_dict)
 
+            println("New defs: $new_td , $new_rd")
+            println("\n Terms, rules were $term_defs\n====\n$rule_defs")
             append!(term_defs, new_td)
             append!(rule_defs, new_rd)
         elseif stmt.data == "declare"
@@ -732,7 +831,7 @@ load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
 
         name = "__IGNORE_$(length(ignore_names))"
         push!(ignore_names,name)
-        push!(term_defs,(name, (t, 0)))
+        push!(term_defs,[name, (t, 0)])
     end
     # Verify correctness 2
     terminal_names = Set()
@@ -788,4 +887,4 @@ load_grammar(gl::GrammarLoader, grammar_text, grammar_name="<?>") = begin
 
 end
 
-load_grammar(text::String;options...) = load_grammar(GrammarLoader(),text,options...)
+load_grammar(text::String;options...) = load_grammar(GrammarLoader(),text;options...)

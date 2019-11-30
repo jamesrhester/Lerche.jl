@@ -20,7 +20,7 @@ get_context(ui::UnexpectedInput,text;span=40) = begin
     start = max(pos - span,1)
     _end = min(pos + span,length(text))
     before = rsplit(text[start:pos],"\n",limit=2)[end]
-    after = split(text[pos:_end],"\n",limit=2)[1]
+    after = split(text[pos+1:_end],"\n",limit=2)[1]
     return before*after*"\n"*repeat(" ",length(before)) * "^\n"
 end
 
@@ -77,7 +77,7 @@ end
 UnexpectedCharacters(seq,lex_pos,line,column;state=nothing) = UnexpectedCharacters(seq,lex_pos,line,column,nothing,nothing,nothing)
 
 Base.showerror(io::IO,uc::UnexpectedCharacters) = begin
-    message = "\n\n $(get_context(uc,uc.seq))"
+    message = "Unexpected characters: \n\n $(get_context(uc,uc.seq))"
     if uc.allowed != nothing
         message *= "\nExpecting: $allowed"
     end

@@ -16,7 +16,8 @@ init_contextual_lexer(p::WithLexer,lexer_conf) = begin
     else
         ()
     end
-    p.lexer = ContextualLexer(lexer_conf.tokens,states,
+    state_channel = Channel(0)
+    p.lexer = ContextualLexer(lexer_conf.tokens,states,state_channel,
                               ignore=lexer_conf.ignore,
                               always_accept=always_accept,
                               user_callbacks=lexer_conf.callbacks)
@@ -31,13 +32,9 @@ lex(p::WithLexer,text) = begin
 end
 
 parse(p::WithLexer,text) = begin
-    change_lexer_state = partial(set_parser_state!,p.lexer)
-    # Set the start state before we start lexing, otherwise the
-    # contextual lexer will try to execute up to providing the first token
-    # and won't have a lexer to call!
-    change_lexer_state(p.parser.parser.start_state)
     token_stream = lex(p,text)
-    return parse(p.parser,token_stream,set_state=change_lexer_state)
+    set_state = partial(set_lexer_state,p.lexer)
+    return parse(p.parser,token_stream,set_state=set_state)
 end
 
 mutable struct LALR_TraditionalLexer <: WithLexer

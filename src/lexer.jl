@@ -47,9 +47,9 @@ min_width(pstr::PatternStr) = length(pstr.value)
 max_width(pstr::PatternStr) = min_width(pstr)
 
 struct TerminalDef
-    name
-    pattern
-    priority
+    name::String
+    pattern::Pattern
+    priority::Int64
 end
 
 TerminalDef(name,pattern; priority=1) = TerminalDef(name,pattern,priority)
@@ -136,19 +136,19 @@ _Lex(lexer;state=nothing) = _Lex(lexer,state)
 
 abstract type Lexer end
 
-set_parser_state!(l::Lexer,state) = nothing
-
 # The lex function creates a channel which is iterated over to get the
-# tokens
+# tokens. If state_src is not nothing, it is a channel from which to obtain
+# the next parser state to determine the correct lexer to use.
 lex(l::Lexer,stream::String,newline_types,ignore_types) = Channel() do token_chan
         newline_types = Set(newline_types)
         ignore_types = Set(ignore_types)
 
     line_ctr = LineCounter()
-    mres,names_by_idx = l.mres
     println("Lex primed with /$stream/")
+    sub_lexer = get_lexer(l)  #For contextual lexers
     while line_ctr.char_pos <= length(stream)
         println("Now at char pos $(line_ctr.char_pos)")
+        mres,names_by_idx = sub_lexer.mres   #
         m = Base.match(mres,stream,line_ctr.char_pos)
         if m == nothing
             throw(UnexpectedCharacters(stream,line_ctr.char_pos, line_ctr.line,
@@ -161,16 +161,17 @@ lex(l::Lexer,stream::String,newline_types,ignore_types) = Channel() do token_cha
         println("Matched $type_ : '$value'")
         if !(type_ in ignore_types)
             t = Token(type_,value,pos_in_stream=line_ctr.char_pos,line=line_ctr.line,column=line_ctr.column)
-            if t.type_ in collect(keys(l.callback))
+            if t.type_ in collect(keys(sub_lexer.callback))
                 println("Calling callback for $(t.type_)")
-                t = l.callback[t.type_](t)
+                t = sub_lexer.callback[t.type_](t)
                 println("Resulting in $t")
             end
             put!(token_chan,t)
+            sub_lexer = get_lexer(l)  #wait for update
         else
-            if type_ in collect(keys(l.callback))
+            if type_ in collect(keys(sub_lexer.callback))
                 t = Token(type_, value, pos_in_stream=line_ctr.char_pos, line=line_ctr.line, column=line_ctr.column)
-                l.callback[type_](t)
+                sub_lexer.callback[type_](t)
             end
         end
         feed!(line_ctr,value,test_newline = type_ in newline_types)
@@ -289,9 +290,10 @@ mutable struct ContextualLexer <: Lexer
     lexers::Dict{Any,TraditionalLexer}
     root_lexer::TraditionalLexer
     parser_state
+    state_source::Channel
 end
 
-ContextualLexer(terminals,states;ignore=(),always_accept=(),user_callbacks=Dict()) = begin
+ContextualLexer(terminals,states,state_channel;ignore=(),always_accept=(),user_callbacks=Dict()) = begin
     tokens_by_name = Dict()
     for t in terminals
         @assert !(t.name in collect(keys(tokens_by_name))) 
@@ -314,16 +316,46 @@ ContextualLexer(terminals,states;ignore=(),always_accept=(),user_callbacks=Dict(
         lexers[state] = lexer
     end
     root_lexer = TraditionalLexer(terminals,ignore=ignore,user_callbacks=user_callbacks)
-    ContextualLexer(lexers,root_lexer,nothing)
+    ContextualLexer(lexers,root_lexer,nothing,state_channel)
 end
 
 # This is a method in Python designed to capture the lexer it belongs to
 # in a closure, so the lexer doesn't have to be followed explicitly within
 # the parser
-
-set_parser_state!(cl::ContextualLexer,state) = begin
-    cl.parser_state = state
+#==
+set_parser_state!(cl::ContextualLexer,state_src) = begin
+    tt = time()
+    new_state = take!(state_src)
+    println("$tt: Set lexer parser state to $state")
 end
+==#
+get_lexer(l::Lexer) = begin
+    println("Returning self")
+    l
+end
+
+get_lexer(cl::ContextualLexer) = begin
+    tt = time()
+    println("$tt: waiting for state change")
+    flush(stdout)
+    new_state = take!(cl.state_source)
+    tt = time()
+    println("$tt: Set lexer parser state to $new_state")
+    return cl.lexers[new_state]
+end
+
+set_lexer_state(l::Lexer,state) = begin
+    println("Skipping state set command")
+end
+
+set_lexer_state(l::ContextualLexer,state) = begin
+    tt = time()
+    println("$tt: Send off state change to $state")
+    put!(l.state_source,state)
+end
+
+get_channel(l::Lexer) = nothing
+get_channel(l::ContextualLexer) = l.state_source
 
 #== 
 
@@ -337,22 +369,33 @@ one entry so that the lexer has to wait until the parser
 has processed the token before deciding on which lexer to
 use next.
 
-==#
 
-lex(cl::ContextualLexer,stream) = Channel(csize=0) do lexchan
+lex(cl::ContextualLexer,stream) = Channel() do lexchan
     begin
-        if isnothing(cl.parser_state)
-            error("The parser state should not be nothing")
-        end
-        l = [cl.lexers[cl.parser_state],cl.parser_state]
-        for x in lex(l[1],stream,cl.root_lexer.newline_types,cl.root_lexer.ignore_types)
-            println("Token: $x")
-            put!(lexchan,x)  #will block until the value is taken
-            # we don't want this to be set until the parsing has happened!
-            println("Now setting the lexer state to $(cl.parser_state)")
-            l[1] = cl.lexers[cl.parser_state]  #
-            l[2] = cl.parser_state
+        # Set the starting state
+        new_state = take!(cl.state_source)
+        l = cl.lexers[new_state]
+        token_src = lex(l[1],stream,cl.root_lexer.newline_types,cl.root_lexer.ignore_types)
+        while true
+            x = nothing
+            try
+                x = take!(token_src)
+            catch e
+                println("Finishing lexing, final status $e")
+                break
+            end
+            tt = time()
+            println("$tt Token: $x")
+            put!(lexchan,x)  #will block until the value is taken by the parser
+            new_state = take!(cl.state_source)
+            tt = time()
+            println("$tt: Now setting the lexer state to $(new_state)")
+            l[1] = cl.lexers[new_state]  #
+            l[2] = new_state
         end
     end
 end
 
+==#
+
+lex(cl::ContextualLexer,stream) = lex(cl,stream,cl.root_lexer.newline_types,cl.root_lexer.ignore_types)
