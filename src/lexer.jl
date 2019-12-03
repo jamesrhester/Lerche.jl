@@ -32,20 +32,22 @@ end
 
 struct PatternStr <: Pattern
     value::String
-    flags::Set{String}
+    flags::Set{Char}
 end
 
 struct PatternRE <: Pattern
     value::String
-    flags::Set{String}
+    flags::Set{Char}
 end
 
 PatternRE(value;flags=Set()) = PatternRE(value,flags)
 PatternRE(value,flags::String) = PatternRE(value,Set(flags))
 PatternStr(value,flags::String) = PatternStr(value,Set(flags))
+PatternStr(value,flags::Char) = PatternStr(value,[flags])
+PatternRE(value,flags::Char) = PatternRE(value,[flags])
 
 to_regexp(pre::PatternRE) = _get_flags(pre,pre.value)
-to_regexp(pstr::PatternStr) = _get_flags(pstr,escape_string(pstr.value))
+to_regexp(pstr::PatternStr) = _get_flags(pstr,escape_re_string(pstr.value))
 min_width(pre::PatternRE) = get_regexp_width(to_regexp(pre))[1]
 max_width(pre::PatternRE) = get_regexp_width(to_regexp(pre))[2]
 

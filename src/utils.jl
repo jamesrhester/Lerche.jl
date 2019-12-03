@@ -83,6 +83,13 @@ end
 
 ## ============Only in the Julia version ===========
 ##
+## Regular expression escape; copied from Python version
+
+escape_re_string(s::String) = begin
+    special_chars = "()[]{}?*+-|^\$\\.&~# \t\n\r\v\f"
+    replace(s, Set(special_chars) => x -> "\\" * x)
+end
+
 
 ## Partial function
 

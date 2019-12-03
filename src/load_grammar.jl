@@ -276,7 +276,8 @@ PrepareAnonTerminals(terminals) = PrepareAnonTerminals(terminals,Set([td.name fo
                     term_name = _TERMINAL_NAMES[value]
                 catch f
                     if f isa KeyError
-                        if !(uppercase(value) in panon.term_set)
+                        # following test to make sure the group name in regular expression is allowed
+                        if all(x->isletter(x)||isnumeric(x),value) && isletter(value[1]) && !(uppercase(value) in panon.term_set)
                             term_name = uppercase(value)
                         end
                     else
@@ -394,6 +395,7 @@ _literal_to_pattern(literal) = begin
     if literal.type_ == "STRING"
         s = replace(s,"\\\\"=>"\\")
     end
+    println("Flags are: $flags")
     return Dict("STRING"=> PatternStr,
                 "REGEXP" => PatternRE)[literal.type_](s,flags)
 end
