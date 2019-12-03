@@ -5,7 +5,9 @@ end
 # These are concrete to allow messages to be attached
 # to them.
 struct ParseError <: Exception end
-struct LexError <: Exception end
+struct LexError <: Exception
+    message::String
+end
 
 #==
 The UnexpectedInput type holds the common behaviour of

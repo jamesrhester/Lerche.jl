@@ -12,10 +12,14 @@ get_flags(p1::Pattern) = p1.flags
 get_value(p1::Pattern) = p1.value
 
 Base.:(==)(p1::Pattern, p2::Pattern) = begin
-    if p1.value == p2.value && p1.flags == p2.flags
+    if typeof(p1) == typeof(p2) && p1.value == p2.value && p1.flags == p2.flags
         return true
     end
     return false
+end
+
+Base.hash(p1::Pattern) = begin
+    return hash((typeof(p1),p1.value,p1.flags))
 end
 
 # TODO: how to look after flags in Julia?
@@ -27,16 +31,18 @@ _get_flags(p1::Pattern,value) = begin
 end
 
 struct PatternStr <: Pattern
-    value
-    flags
+    value::String
+    flags::Set{String}
 end
 
 struct PatternRE <: Pattern
-    value
-    flags
+    value::String
+    flags::Set{String}
 end
 
-PatternRE(value;flags=()) = PatternRE(value,flags)
+PatternRE(value;flags=Set()) = PatternRE(value,flags)
+PatternRE(value,flags::String) = PatternRE(value,Set(flags))
+PatternStr(value,flags::String) = PatternStr(value,Set(flags))
 
 to_regexp(pre::PatternRE) = _get_flags(pre,pre.value)
 to_regexp(pstr::PatternStr) = _get_flags(pstr,escape_string(pstr.value))
@@ -237,7 +243,9 @@ end
 build_mres(terminals;match_whole=false) = begin
     postfix = ""
     if match_whole postfix = "\$" end
-    mres = Regex(join(["(?P<$(t.name)>$(to_regexp(t.pattern)*postfix))" for t in terminals],"|"))
+    prep_string = join(["(?P<$(t.name)>$(to_regexp(t.pattern)*postfix))" for t in terminals],"|")
+    println("String for regex: $prep_string")
+    mres = Regex(prep_string)
     names_by_idx = Base.PCRE.capture_names(mres.regex)
     println("All regexes now $mres")
     return mres,names_by_idx

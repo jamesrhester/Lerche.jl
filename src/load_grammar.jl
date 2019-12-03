@@ -30,7 +30,7 @@ const _TERMINAL_NAMES = Dict(
     ">" => "MORETHAN",
     "=" => "EQUAL",
     "\"" => "DBLQUOTE",
-    "\'" => "QUOTE",
+    "'" => "QUOTE",
     "`" => "BACKQUOTE",
     "~" => "TILDE",
     "(" => "LPAR",
@@ -258,24 +258,36 @@ PrepareAnonTerminals(terminals) = PrepareAnonTerminals(terminals,Set([td.name fo
                                                        0)
 
 @inline_rule pattern(panon::PrepareAnonTerminals,p) = begin
+    println("Processing $p")
+    println("Value: $(p.value)")
+    println("Term reverse lookup: $(keys(panon.term_reverse))")
     value = p.value
     if p in collect(keys(panon.term_reverse)) && p.flags != panon.term_reverse[p].pattern.flags
         throw(GrammarError("Conflicting flags for the same terminal: $p"))
     end
     term_name = nothing
     if p isa PatternStr
+        println("Creating term name for $p")
         try
             term_name = panon.term_reverse[p].name
-        catch KeyError
-            try
-                term_name = _TERMINAL_NAMES[value]
-            catch KeyError
-                if !(uppercase(value) in panon.term_set)
-                    term_name = uppercase(value)
+        catch e
+            if e isa KeyError
+                try
+                    term_name = _TERMINAL_NAMES[value]
+                catch f
+                    if f isa KeyError
+                        if !(uppercase(value) in panon.term_set)
+                            term_name = uppercase(value)
+                        end
+                    else
+                        rethrow(f)
+                    end
                 end
-            end
-            if term_name in panon.term_set
-                term_name = nothing
+                if term_name in panon.term_set
+                    term_name = nothing
+                end
+            else   #not a key error
+                rethrow(e)
             end
         end
     elseif p isa PatternRE
@@ -334,9 +346,37 @@ is evaluated as a unicode string literal.
 After calling this routine in _literal_to_pattern, double backslashes
 are removed for strings, but remain for regular expressions.
 
-Julia does not need to eval the string.
+Julia does not eval the string. However, we still need to
+be able to make substitutions for common escapes \ + n/f/t/r.
+
+The point of this routine is to interpret the escapes correctly,
+after they have been read in (not when they are read in). So the
+
 ==#
-_fix_escaping(s) = error("Cannot fix escaping")
+_fix_escaping(s) = begin
+    println("Fixing |$s|")
+    w = ""
+    i = iterate(s)
+    while i != nothing
+        n,state = i
+        w *= n
+        if n == '\\'
+            println("Found a backslash")
+            n2,state = iterate(s,state)
+            if n2 == '\\'
+                println("Followed by a backslash!")
+                w *= "\\\\"
+            elseif !(occursin(n2,"unftr\""))
+                w *= "\\"
+            end
+            w *= n2
+        end
+        i = iterate(s,state)
+    end
+    new_s = unescape_string(w)
+    println("Now fixed:\n |$new_s|")
+    return new_s
+end
 
 ## TODO write this properly
 _literal_to_pattern(literal) = begin
@@ -350,7 +390,7 @@ _literal_to_pattern(literal) = begin
     @assert v[1] == v[end] && occursin(v[1], "\"/")
     x = v[2:end-1]   #drop delimiters
     ### TODO fix escaping
-    s = x
+    s = _fix_escaping(x)
     if literal.type_ == "STRING"
         s = replace(s,"\\\\"=>"\\")
     end
