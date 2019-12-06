@@ -65,7 +65,13 @@ expand_kids_by_index!(t::Tree, indices) = begin
     #println("Returning: $t")
 end
 
-Base.:(==)(t1::Tree,t2::Tree) = t1.data == t2.data && t1.children == t2.children
+Base.:(==)(t1::Tree,t2::Tree) = begin
+    return t1.data == t2.data && t1.children == t2.children
+end
+
+Base.hash(t1::Tree) = begin
+    return hash(t1.data) + hash(t1.children)
+end
 
 find_pred(t::Tree,pred) = begin
     filter(pred, collect(iter_subtrees(t)))

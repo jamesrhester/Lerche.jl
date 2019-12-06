@@ -69,7 +69,7 @@ _build_recons_rules(rules) = Channel() do rule_chan
 
     rule_names = Set(r.origin for r in rules)
     nonterminals = Set(sym for sym in rule_names
-                       if first(sym.name)=="_" || sym in expand1s || sym in aliases)
+                       if first(sym.name)=='_' || sym in expand1s || sym in aliases)
     for r in rules
         recons_exp = map(r.expansion) do sym
             if sym in nonterminals sym else Terminal(sym.name) end

@@ -78,6 +78,7 @@ Token(type_,value;pos_in_stream=nothing,line=nothing,column=nothing) =
 # Reimplement some string methods for later use...
 Base.startswith(t::Token,c) = startswith(t.value,c)
 Base.lstrip(t::Token,c) = lstrip(t.value,c)
+Base.parse(::Type{T},t::Token) where T = Base.parse(T,t.value)
 
 # Lexer.py implements a generic equality, where any comparison other
 # than with another token defaults to string comparison
@@ -105,14 +106,14 @@ new_borrow_pos(type_,value, borrow_t) = Token(type_,value,borrow_t.pos_in_stream
 ## __reduce__ not reproduced; need to check if we need it.
 
 mutable struct LineCounter
-    newline_char
+    newline_char::Char
     char_pos::Int #1 is first pos unlike Python
     line::Int
     column::Int
     line_start_pos::Int
 end
 
-LineCounter() = LineCounter("\n",1,1,1,1)
+LineCounter() = LineCounter('\n',1,1,1,1)
 
 """
 feed
@@ -124,9 +125,10 @@ TODO: check indexing is correct
 feed!(lc::LineCounter,token;test_newline=true) = begin
     if test_newline
         newlines = count(x -> x == lc.newline_char, token)
+        println("Counted $newlines newlines in $token")
         if newlines > 0
             lc.line = lc.line + 1
-            lc.line_start_pos = lc.char_pos + findlast(lc.newline_char)+1
+            lc.line_start_pos = lc.char_pos + first(findlast("$(lc.newline_char)",token))
         end
     end
     lc.char_pos += length(token)
@@ -158,12 +160,13 @@ lex(l::Lexer,stream::String,newline_types,ignore_types) = Channel() do token_cha
         println("Now at char pos $(line_ctr.char_pos)")
         mres,names_by_idx = sub_lexer.mres   #
         m = Base.match(mres,stream,line_ctr.char_pos)
-        if m == nothing
+        if m == nothing || m.match == ""
             throw(UnexpectedCharacters(stream,line_ctr.char_pos, line_ctr.line,
                                        line_ctr.column))
         end
         t = nothing
         value = m.match
+        println("Matches: $m; $(m.match=="")")
         match_num = min([i for (i,v) in enumerate(m.captures) if !isnothing(v)]...)
         type_ = names_by_idx[match_num]
         println("Matched $type_ : '$value'")

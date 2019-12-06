@@ -164,11 +164,11 @@ end
         return Tree("expansions",[new_name, Tree("expansion",[])])
     elseif op.value == "~"
         if length(args) == 1
-            mn = mx = Int(args[1])
+            mn = mx = Base.parse(Int64,args[1])
         else
-            mn,mx = parse.(Int,args)
+            mn,mx = Base.parse.(Int,args)
             if mx < mn
-                error("Bad range for $rule ($mn..$mx isn't allowed)")
+                throw(GrammarError("Bad range for $rule ($mn..$mx isn't allowed)"))
             end
         end
         return Tree("expansions", [Tree("expansion",fill(rule,n)) for n in mn:mx])
@@ -177,7 +177,9 @@ end
 
 struct SimplifyRule_Visitor <: Visitor end
 
-_flatten!(srv::SimplifyRule_Visitor,tree::Tree) = begin
+# So what this does is to find children with the same data type as the parent,
+# and bring them to the same level of the tree
+_flatten!(tree::Tree) = begin
     while true
         to_expand = [i for (i,child) in enumerate(tree.children) if child isa Tree && child.data == tree.data]
         if length(to_expand) == 0 break end
@@ -188,18 +190,27 @@ end
 # Changes the argument but we can't add exclamation marks or it will
 # spoil the link between rule and function
 @rule expansion(srv::SimplifyRule_Visitor,tree::Tree) = begin
-    _flatten!(srv,tree)
+    _flatten!(tree)
     for (i,child) in enumerate(tree.children)
         if child isa Tree && child.data == "expansions"
             tree.data = "expansions"
-            tree.children = [visit(srv,Tree("expansion",
-                                           [if i==j option else other end
-                                            for (j,other) in enumerate(tree.children)]))
-                             for option in Set(child.children)]
-            _flatten!(srv,tree)
+            new_children = []
+            for option in unique(child.children)
+                temp_tree = Tree("expansion", [if i==j 
+                                           option
+                                           else
+                                           other
+                                           end
+                                               for (j,other) in enumerate(tree.children)])
+                visitation = visit(srv,temp_tree)
+                new_children = push!(new_children,visitation)
+            end
+            tree.children = new_children
+            _flatten!(tree)
             break
         end
     end
+    println("After expansion:\n $(pretty(tree))")
 end
 
 @rule alias(srv::SimplifyRule_Visitor,tree::Tree) = begin
@@ -215,14 +226,13 @@ end
 end
 
 @rule expansions(srv::SimplifyRule_Visitor,tree) = begin
-    _flatten!(srv,tree)
-    tree.children = unique(tree.children)
+    _flatten!(tree)
+    unique!(tree.children)
 end
 
 struct RuleTreeToText <: Transformer end
 
 @rule expansions(rtt::RuleTreeToText,x) = begin
-    println("Pass through $x")
     return x
 end
 
@@ -445,9 +455,9 @@ end
     inner,op = args[1:2]
     if op == "~"
         if length(args) == 3
-            op = "{$(parse(Int,args[3]))}"
+            op = "{$(Base.parse(Int64,args[3]))}"
         else
-            mn,mx = parse.(Int,args[3:end])
+            mn,mx = Base.parse.(Int64,args[3:end])
             if mx < mn
                 throw(GrammarError("Bad range for $inner ($mn..$mx isn't allowed)"))
             end
@@ -455,8 +465,9 @@ end
         end
     else
         @assert length(args) == 2
+        op = op.value
     end
-    f = PatternRE("(?:$(to_regexp(inner)))$(op.value)",inner.flags)
+    f = PatternRE("(?:$(to_regexp(inner)))$op",inner.flags)
     return f
 end
 
@@ -474,7 +485,7 @@ struct PrepareSymbols <: Transformer_InPlace end
     elseif v.type_ == "RULE"
         return NonTerminal(v.value)
     elseif v.type_ == "TERMINAL"
-        return Terminal(v.value, filter_out = x -> startswith(x,"_"))
+        return Terminal(v.value, filter_out = startswith(v.value,"_"))
     end
     @assert false
 end
@@ -543,6 +554,7 @@ compile(g::Grammar) = begin
     simplify_rule = SimplifyRule_Visitor()
     compiled_rules = []
     for (name, tree, options) in rules
+        println("Rule $name:\n $(pretty(tree))")
         visit(simplify_rule,tree)
         #println("Tree after simplification:\n$tree")
         expansions = transform(rule_tree_to_text,tree)
@@ -564,16 +576,18 @@ end
 
 const _imported_grammars = Dict()
 
+# Lark cycles through all paths, suppressing IOErrors, and if none are
+# successful it deliberately opens a file to create a new IOError.
 import_grammar(grammar_path;base_paths=[]) = begin
     println("Importing grammar from $grammar_path")
     if !(grammar_path in keys(_imported_grammars))
         import_paths = copy(base_paths)
         append!(import_paths,IMPORT_PATHS)
+        text = nothing
         for import_path in import_paths
-    text = ""
             println("Trying $import_path (out of $IMPORT_PATHS)")
             try
-                Base.open(joinpath(import_path,grammar_path)) do f
+                Base.open(joinpath(import_path,grammar_path),"r") do f
                     text = read(f,String)
                 end
             catch e
@@ -581,10 +595,12 @@ import_grammar(grammar_path;base_paths=[]) = begin
                     rethrow(e)
                 end
             end
+            if isnothing(text) continue end
             grammar = load_grammar(text,grammar_name=grammar_path)
             _imported_grammars[grammar_path] = grammar
             break
         end
+        if isnothing(text) Base.open(grammar_path,"r") end
     end
     return _imported_grammars[grammar_path]
 end
@@ -621,7 +637,7 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
         if symbol.type_ == "TERMINAL"
             push!(term_defs,[get_namespace_name(symbol), imported_terms[symbol]])
         else
-            @assert symbol.type == "RULE"
+            @assert symbol.type_ == "RULE"
             rule = imported_rules[symbol]
             for t in iter_subtrees(rule[2])
                 for (i, c) in enumerate(t.children)
@@ -776,7 +792,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
     @assert length(defs) == 0
 
     term_defs = [if length(td)==3 td else [td[1], 1, td[2]] end for td in term_defs]
-    term_defs = [[name.value, [t, if !(typeof(p) <: Int) Base.parse(Int64,p) else p end]] for (name, p, t) in term_defs]
+    term_defs = [[name.value, [t, if !(typeof(p) <: Int) Base.parse(Int64,p.value) else p end]] for (name, p, t) in term_defs]
     rule_defs = [options_from_rule(x[1],x[2:end]...) for x in rule_defs]
 
     #println("Check: term_defs $term_defs\nrule_defs $rule_defs")
@@ -815,13 +831,13 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
             if path_node.data == "import_lib"  # Import from library
                 g = import_grammar(grammar_path)
             else  # Relative import
+                println("Grammar name is $grammar_name")
                 if grammar_name == "<string>"  # Import relative to script file path if grammar is coded in script
-                    base_file = abspath(@__FILE__)
+                    base_file = abspath(PROGRAM_FILE)
                 else
                     base_file = grammar_name  # Import relative to grammar file path if external grammar file
                 end
-                
-                base_path = splitpath(base_file)[1]
+                base_path = first(splitdir(base_file))
                 g = import_grammar(grammar_path, base_paths=[base_path])
             end
             

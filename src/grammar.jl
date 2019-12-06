@@ -17,9 +17,9 @@ end
 Base.show(io::IO,ls::LarkSymbol) = print(io,"$(typeof(ls))($(ls.name))")
 
 struct Terminal <: LarkSymbol
-    name
-    is_term
-    filter_out
+    name::String
+    is_term::Bool
+    filter_out::Bool
 end
 
 Terminal(name;filter_out=false) = Terminal(name,true,filter_out)
@@ -27,8 +27,8 @@ Terminal(name;filter_out=false) = Terminal(name,true,filter_out)
 Base.show(io::IO,ls::Terminal) = print(io,"Terminal($(ls.name))")
 
 struct NonTerminal <: LarkSymbol
-    name
-    is_term
+    name::String
+    is_term::Bool
 end
 
 Base.show(io::IO,ls::NonTerminal) = print(io,"NonTerminal($(ls.name))")

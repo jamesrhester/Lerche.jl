@@ -160,7 +160,8 @@ end
 __default__(v::VisitorBase,tree) = tree
 
 visit(v::Visitor,tree) = begin
-    for subtree in iter_subtrees(tree)
+    target_trees = collect(iter_subtrees(tree))
+    for (i,subtree) in enumerate(target_trees)
         _call_userfunc(v,subtree)
     end
     return tree

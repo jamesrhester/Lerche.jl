@@ -42,7 +42,7 @@ end
 
 # A change from Python Lark: set_state is a channel to send the new
 # state to.  This helps coordination.
-parse(p::_LALRParser,seq; set_state = nothing, debug=true) = begin
+parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
     i = 0
     token = nothing
 #    stream = iter(seq)   ####
@@ -77,7 +77,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=true) = begin
     end
     
     reduce(rule) = begin
-        println("Reducing according to $rule")
+        # println("Reducing according to $rule")
         size = length(rule.expansion)
         if size>0
             s = value_stack[end-size+1:end]
@@ -89,7 +89,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=true) = begin
         
         value = p.callbacks[rule](s)
 
-        println("Callback for $rule executed to obtain value $value")
+        # println("Callback for $rule executed to obtain value $value")
         _action, new_state = states[state_stack[end]][rule.origin.name]
         @assert _action == Shift
         push!(state_stack,new_state)
@@ -116,14 +116,14 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=true) = begin
                 end
                 break # next token
             else
-                #if debug
+                if debug
                     println("Seen $(token.type_),\n reducing with $arg")
-                #end
+                end
                 reduce(arg)
-                #if debug
+                if debug
                     println("Reduced to \n $(state_stack[end])")
                     println("Stack: $value_stack")
-                #end
+                end
             end
         end
     end
