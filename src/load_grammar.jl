@@ -210,7 +210,7 @@ end
             break
         end
     end
-    println("After expansion:\n $(pretty(tree))")
+    #println("After expansion:\n $(pretty(tree))")
 end
 
 @rule alias(srv::SimplifyRule_Visitor,tree::Tree) = begin
@@ -268,16 +268,12 @@ PrepareAnonTerminals(terminals) = PrepareAnonTerminals(terminals,Set([td.name fo
                                                        0)
 
 @inline_rule pattern(panon::PrepareAnonTerminals,p) = begin
-    println("Processing $p")
-    println("Value: $(p.value)")
-    println("Term reverse lookup: $(keys(panon.term_reverse))")
     value = p.value
     if p in collect(keys(panon.term_reverse)) && p.flags != panon.term_reverse[p].pattern.flags
         throw(GrammarError("Conflicting flags for the same terminal: $p"))
     end
     term_name = nothing
     if p isa PatternStr
-        println("Creating term name for $p")
         try
             term_name = panon.term_reverse[p].name
         catch e
@@ -365,17 +361,14 @@ after they have been read in (not when they are read in). So the
 
 ==#
 _fix_escaping(s) = begin
-    println("Fixing |$s|")
     w = ""
     i = iterate(s)
     while i != nothing
         n,state = i
         w *= n
         if n == '\\'
-            println("Found a backslash")
             n2,state = iterate(s,state)
             if n2 == '\\'
-                println("Followed by a backslash!")
                 w *= "\\\\"
             elseif !(occursin(n2,"unftr\""))
                 w *= "\\"
@@ -385,13 +378,11 @@ _fix_escaping(s) = begin
         i = iterate(s,state)
     end
     new_s = unescape_string(w)
-    println("Now fixed:\n |$new_s|")
     return new_s
 end
 
 ## TODO write this properly
 _literal_to_pattern(literal) = begin
-    println("Converting $literal to pattern")
     v = literal.value
     flag_start = _rfind(v, "/\"") + 1
     @assert flag_start > 0
@@ -405,7 +396,6 @@ _literal_to_pattern(literal) = begin
     if literal.type_ == "STRING"
         s = replace(s,"\\\\"=>"\\")
     end
-    println("Flags are: $flags")
     return Dict("STRING"=> PatternStr,
                 "REGEXP" => PatternRE)[literal.type_](s,flags)
 end
@@ -478,7 +468,6 @@ end
 struct PrepareSymbols <: Transformer_InPlace end
 
 @rule value(ps::PrepareSymbols,v) = begin
-    print("PrepareSymbols/value called with $v")
     v = v[1]
     if v isa Tree
         return v
@@ -541,9 +530,7 @@ compile(g::Grammar) = begin
         tree = transform(transformer,rule_tree)
         push!(rules,(name, transform(ebnf_to_bnf,tree), options))
     end
-
-    println("Transformed rules: $rules")
-    
+   
     append!(rules, ebnf_to_bnf.new_rules)
     
     @assert length(rules) == length(Set(name for (name, _t, _o) in rules)) "Whoops, name collision"
@@ -554,7 +541,6 @@ compile(g::Grammar) = begin
     simplify_rule = SimplifyRule_Visitor()
     compiled_rules = []
     for (name, tree, options) in rules
-        println("Rule $name:\n $(pretty(tree))")
         visit(simplify_rule,tree)
         #println("Tree after simplification:\n$tree")
         expansions = transform(rule_tree_to_text,tree)
@@ -579,7 +565,6 @@ const _imported_grammars = Dict()
 # Lark cycles through all paths, suppressing IOErrors, and if none are
 # successful it deliberately opens a file to create a new IOError.
 import_grammar(grammar_path;base_paths=[]) = begin
-    println("Importing grammar from $grammar_path")
     if !(grammar_path in keys(_imported_grammars))
         import_paths = copy(base_paths)
         append!(import_paths,IMPORT_PATHS)
@@ -612,12 +597,10 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
     rule_defs = []
 
     rule_dependencies(symbol) = begin
-        println("Checking $symbol")
         if symbol.type_ != "RULE"
             return []
         end
         _, tree, _ = imported_rules[symbol]
-        println("Scanning $tree")
         return scan_values(tree, x-> x.type_ in ("RULE","TERMINAL"))
     end
 
@@ -844,8 +827,6 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
             aliases_dict = Dict(zip(names, aliases))
             new_td, new_rd = import_from_grammar_into_namespace(g, join(dotted_path,"."), aliases_dict)
 
-            println("New defs: $new_td , $new_rd")
-            println("\n Terms, rules were $term_defs\n====\n$rule_defs")
             append!(term_defs, new_td)
             append!(rule_defs, new_rd)
         elseif stmt.data == "declare"
@@ -924,7 +905,6 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
     for (name, expansions, _o) in rules
         used_symbols = Set([t for x in find_data(expansions,"expansion")
                             for t in scan_values(x,t -> t.type_ in ("RULE", "TERMINAL"))])
-        println("Symbols used for $name: $used_symbols")
         for sym in used_symbols
             if sym.type_ == "TERMINAL"
                 if !(sym in terminal_names)
@@ -940,7 +920,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
                     
 # TODO don't include unused terminals, they can only cause trouble!
 
-    println("Baking it in, baby: Rules $rules\n\nTerm defs: $term_defs\n\nIgnoring: $ignore_names")
+    #println("Baking it in, baby: Rules $rules\n\nTerm defs: $term_defs\n\nIgnoring: $ignore_names")
     return Grammar(rules, term_defs, ignore_names)
 
 end

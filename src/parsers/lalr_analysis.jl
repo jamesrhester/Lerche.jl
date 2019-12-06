@@ -45,8 +45,6 @@ from_ParseTable(parse_table) = begin
 
     start_state = state_to_idx[parse_table.start_state]
     end_state = state_to_idx[parse_table.end_state]
-    println("Start state: $start_state")
-    println("End state: $end_state")
     return ParseTable(int_states,start_state,end_state)
 end
 
@@ -145,7 +143,7 @@ compute_lookahead!(l::LALR_Analyzer) = begin
 
     l.end_state = first(l.end_states)
 
-    println("End states: $(l.end_state)")
+    #println("End states: $(l.end_state)")
     l._parse_table = ParseTable(l.states,l.start_state,l.end_state)
 
     #println("Analyser info: $l")

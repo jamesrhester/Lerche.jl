@@ -125,7 +125,6 @@ TODO: check indexing is correct
 feed!(lc::LineCounter,token;test_newline=true) = begin
     if test_newline
         newlines = count(x -> x == lc.newline_char, token)
-        println("Counted $newlines newlines in $token")
         if newlines > 0
             lc.line = lc.line + 1
             lc.line_start_pos = lc.char_pos + first(findlast("$(lc.newline_char)",token))
@@ -154,10 +153,9 @@ lex(l::Lexer,stream::String,newline_types,ignore_types) = Channel() do token_cha
         ignore_types = Set(ignore_types)
 
     line_ctr = LineCounter()
-    println("Lex primed with /$stream/")
     sub_lexer = get_lexer(l)  #For contextual lexers
     while line_ctr.char_pos <= length(stream)
-        println("Now at char pos $(line_ctr.char_pos)")
+        #println("Now at char pos $(line_ctr.char_pos)")
         mres,names_by_idx = sub_lexer.mres   #
         m = Base.match(mres,stream,line_ctr.char_pos)
         if m == nothing || m.match == ""
@@ -168,13 +166,10 @@ lex(l::Lexer,stream::String,newline_types,ignore_types) = Channel() do token_cha
         value = m.match
         match_num = min([i for (i,v) in enumerate(m.captures) if !isnothing(v)]...)
         type_ = names_by_idx[match_num]
-        println("Matched $type_ : '$value'")
         if !(type_ in ignore_types)
             t = Token(type_,value,pos_in_stream=line_ctr.char_pos,line=line_ctr.line,column=line_ctr.column)
             if t.type_ in collect(keys(sub_lexer.callback))
-                println("Calling callback for $(t.type_)")
                 t = sub_lexer.callback[t.type_](t)
-                println("Resulting in $t")
             end
             put!(token_chan,t)
             sub_lexer = get_lexer(l)  #wait for update
@@ -199,8 +194,6 @@ end
 
 # This checks for patterns that belong to different REs
 unless_callback(mres) = function (t)
-    println("Unless callback: $t")
-    println("mres are $mres")
     # Note that mres is a single tuple as we are not splitting
     # REs into 100-pattern chunks unlike Python
     mre, type_from_index = mres
@@ -208,7 +201,6 @@ unless_callback(mres) = function (t)
     if m != nothing
         t.type_ = type_from_index[m.offset]
     end
-    println("Returning $t")
     return t
 end
 
@@ -233,7 +225,6 @@ _create_unless(terminals) = begin
         end
         if !isempty(unless)
             callback[retok.name] = unless_callback(build_mres(unless, match_whole = true))
-            println("Will use unless callback for $(retok.name) using $unless")
         end
     end
     terminals = [t for t in terminals if !(t in embedded_strs)]
@@ -248,10 +239,10 @@ build_mres(terminals;match_whole=false) = begin
     postfix = ""
     if match_whole postfix = "\$" end
     prep_string = join(["(?P<$(t.name)>$(to_regexp(t.pattern)*postfix))" for t in terminals],"|")
-    println("String for regex: $prep_string")
+    #println("String for regex: $prep_string")
     mres = Regex(prep_string)
     names_by_idx = Base.PCRE.capture_names(mres.regex)
-    println("All regexes now $mres")
+    #println("All regexes now $mres")
     return mres,names_by_idx
 end
 
@@ -290,7 +281,6 @@ TraditionalLexer(terminals;ignore=(),user_callbacks=Dict()) = begin
         @assert !(type_ in collect(keys(callback)))
         callback[type_] = f
     end
-    println("Terminals: $terminals")
     TraditionalLexer(newline_types,ignore,callback,terminals,build_mres(terminals))
 end
 
@@ -341,28 +331,23 @@ set_parser_state!(cl::ContextualLexer,state_src) = begin
     println("$tt: Set lexer parser state to $state")
 end
 ==#
-get_lexer(l::Lexer) = begin
-    println("Returning self")
-    l
-end
+get_lexer(l::Lexer) = l
 
 get_lexer(cl::ContextualLexer) = begin
     tt = time()
-    println("$tt: waiting for state change")
+    #println("$tt: waiting for state change")
     flush(stdout)
     new_state = take!(cl.state_source)
     tt = time()
-    println("$tt: Set lexer parser state to $new_state")
+    #println("$tt: Set lexer parser state to $new_state")
     return cl.lexers[new_state]
 end
 
-set_lexer_state(l::Lexer,state) = begin
-    println("Skipping state set command")
-end
+set_lexer_state(l::Lexer,state) = nothing
 
 set_lexer_state(l::ContextualLexer,state) = begin
     tt = time()
-    println("$tt: Send off state change to $state")
+    #println("$tt: Send off state change to $state")
     put!(l.state_source,state)
 end
 

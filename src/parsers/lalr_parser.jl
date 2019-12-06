@@ -56,10 +56,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
     value_stack = []
 
     if set_state != nothing
-        println("$(time()): Setting parser state to $(p.start_state)")
         set_state(p.start_state)
-    else
-        println("No way to set state, skipping")
     end
     
     get_action(token) = begin
@@ -109,9 +106,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
                 end
                 push!(state_stack,arg)
                 push!(value_stack,token)
-                println("Value stack is now $value_stack")
                 if set_state != nothing
-                    println("Setting state to $arg")
                     set_state(arg)
                 end
                 break # next token
@@ -131,14 +126,11 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
         
     token = if token != nothing new_borrow_pos("\$END","",token) else Token("\$END","",pos_in_stream=1,line=1,column=1) end
     while true
-        println("Final token is $token, value stack $value_stack")
         _action, arg = get_action(token)
         if _action == Shift
             @assert arg == p.end_state
             @assert length(value_stack) == 1
-            println("Final value stack is $value_stack")
             val = value_stack[1]
-            println("Parsing done: returning $val")
             return val
         else
             reduce(arg)
