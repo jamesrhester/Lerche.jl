@@ -21,10 +21,10 @@ end
 
     struct T <: Transformer end
 
-    @rule i(t::T,args...) = parse.(Int,args...)
-    @rule f(t::T,args...) = parse.(Float64,args...)
-    @rule sub(t::T,args...) = args[1] - args[2]
-    @rule add(t::T,args...) = sum(args)
+    @inline_rule i(t::T,args...) = Base.parse.(Int64,args...)
+    @inline_rule f(t::T,args...) = Base.parse.(Float64,args...)
+    @inline_rule sub(t::T,args...) = args[1] - args[2]
+    @inline_rule add(t::T,args...) = sum(args)
 
     @test transform(T(),t) == 2.9
 end

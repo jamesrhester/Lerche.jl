@@ -166,7 +166,6 @@ lex(l::Lexer,stream::String,newline_types,ignore_types) = Channel() do token_cha
         end
         t = nothing
         value = m.match
-        println("Matches: $m; $(m.match=="")")
         match_num = min([i for (i,v) in enumerate(m.captures) if !isnothing(v)]...)
         type_ = names_by_idx[match_num]
         println("Matched $type_ : '$value'")

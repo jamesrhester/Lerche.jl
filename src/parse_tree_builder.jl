@@ -24,7 +24,7 @@ end
 PropagatePositions(node_builder::Function) = function(children)
     println("Propagating positions")
     res = node_builder(children)
-    #println("Res is $res")
+    println("Res is $res")
     if res isa Tree
         meta(res).empty = true
         for c in children

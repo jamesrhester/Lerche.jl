@@ -1,13 +1,4 @@
 #==
-@testset "Test Lark parser" begin
-
-    #Infinite recursion test
-    
-    g = """start: a
-           a: a | "a"
-        """
-    @test_throws GrammarError Lark(g,parser="lalr")
-
     Propagate positions
     g = Lark("""start: a
                     a: "a"
@@ -27,73 +18,65 @@ end
 
 ==#
 
+# This doesn't seem to work in Lark 0.7 either.
+
+@testset "Propagate positions" begin
+    g = Lark("""start: a
+                    a: "a"
+                 """, lexer="standard",parser="lalr",propagate_positions=true)
+
+    r = Lerchen.parse(g,"a")
+    @test_skip Lerchen.meta(r.children[1]).line == 1
+
+end
+
+@testset "Infinite recursion" begin
+
+    g = """start: a
+           a: a | "a"
+        """
+    @test_throws GrammarError Lark(g,parser="lalr")
+end
+
 make_parser_test(lexer,parser) = begin
     make_lark(grammar;kwargs...) = begin
         Lark(grammar,lexer=lexer,parser=parser,propagate_positions=true;kwargs...)
     end
+    
+    @testset "Test expansions" begin
+    #Test expand1
+    g = Lark("""start: a
+                    ?a: b
+                    b: "x"
+                 """,parser="lalr",lexer="standard",debug=true)
 
+    r = Lerchen.parse(g,"x")
+    @test r.children[1].data == "b"
+    
+    g = Lark("""start: a
+                    ?a: b -> c
+                    b: "x"
+                 """,parser="lalr",lexer="standard")
 
-        @testset "test_ranged_repeat_terms" begin
-            g = """!start: AAA
-                    AAA: "A"~3
-                """
-            l = make_lark(g)
-            @test Lerchen.parse(l,"AAA")== Tree("start", ["AAA"])
-            @test_throws UnexpectedInput Lerchen.parse(l, "AA")
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAAA")
+    r = Lerchen.parse(g,"x")
+    
+    @test r.children[1].data == "c"
 
-            g = """!start: AABB CC
-                    AABB: "A"~0..2 "B"~2
-                    CC: "C"~1..2
-                """
-            l = make_lark(g)
-            @test Lerchen.parse(l,"AABBCC")== Tree("start", ["AABB", "CC"])
-            @test Lerchen.parse(l,"BBC")== Tree("start", ["BB", "C"])
-            @test Lerchen.parse(l,"ABBCC")== Tree("start", ["ABB", "CC"])
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAAB")
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAABBB")
-            @test_throws UnexpectedInput Lerchen.parse(l, "ABB")
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAAABB")
-        end
+    g = Lark("""start: a
+                        ?a: B -> c
+                        B: "x"
+                     """,parser="lalr",lexer="standard")
+    r = Lerchen.parse(g,"x")
+    @test r.children[1].data == "c"
 
-        @testset "test_priority_vs_embedded" begin
-            g = """
-            A.2: "a"
-            WORD: ("a".."z")+
+    g = Lark("""start: a
+                    ?a: b b -> c
+                    b: "x"
+                 """,parser="lalr",lexer="standard")
+    r = Lerchen.parse(g,"xx")
+    @test r.children[1].data == "c" 
 
-            start: (A | WORD)+
-            """
-            l = make_lark(g)
-            t = Lerchen.parse(l,"abc")
-            @test t.children== ["a", "bc"]
-            @test t.children[1].type_ == "A"
-        end
-
-        @testset "test_line_counting" begin
-            p = make_lark("start: /[^x]+/")
-
-            text = "hello\nworld"
-            t = Lerchen.parse(p,text)
-            tok = t.children[1]
-            @test tok== text
-            @test tok.line== 1
-            @test tok.column== 1
-            @test tok.end_line== 2
-            @test tok.end_column== 6
-        end
-
-        @testset "test_empty_end" begin
-            p = make_lark("""
-                start: b c d
-                b: "B"
-                c: | "C"
-                d: | "D"
-            """)
-            res = Lerchen.parse(p,"B")
-            @test length(res.children)== 3
-        end
-
-    # First batch of tests starts here ======
+    end
     
     @testset "Test basic 1 ($lexer, $parser)" begin
     g = make_lark("""start: a+ b a* "b" a*
@@ -761,6 +744,66 @@ make_parser_test(lexer,parser) = begin
             @test_throws UnexpectedInput Lerchen.parse(l, "AAABBB")
             @test_throws UnexpectedInput Lerchen.parse(l, "ABB")
             @test_throws UnexpectedInput Lerchen.parse(l, "AAAABB")
+        end
+
+        @testset "test_ranged_repeat_terms" begin
+            g = """!start: AAA
+                    AAA: "A"~3
+                """
+            l = make_lark(g)
+            @test Lerchen.parse(l,"AAA")== Tree("start", ["AAA"])
+            @test_throws UnexpectedInput Lerchen.parse(l, "AA")
+            @test_throws UnexpectedInput Lerchen.parse(l, "AAAA")
+
+            g = """!start: AABB CC
+                    AABB: "A"~0..2 "B"~2
+                    CC: "C"~1..2
+                """
+            l = make_lark(g)
+            @test Lerchen.parse(l,"AABBCC")== Tree("start", ["AABB", "CC"])
+            @test Lerchen.parse(l,"BBC")== Tree("start", ["BB", "C"])
+            @test Lerchen.parse(l,"ABBCC")== Tree("start", ["ABB", "CC"])
+            @test_throws UnexpectedInput Lerchen.parse(l, "AAAB")
+            @test_throws UnexpectedInput Lerchen.parse(l, "AAABBB")
+            @test_throws UnexpectedInput Lerchen.parse(l, "ABB")
+            @test_throws UnexpectedInput Lerchen.parse(l, "AAAABB")
+        end
+
+        @testset "test_priority_vs_embedded" begin
+            g = """
+            A.2: "a"
+            WORD: ("a".."z")+
+
+            start: (A | WORD)+
+            """
+            l = make_lark(g)
+            t = Lerchen.parse(l,"abc")
+            @test t.children== ["a", "bc"]
+            @test t.children[1].type_ == "A"
+        end
+
+        @testset "test_line_counting" begin
+            p = make_lark("start: /[^x]+/")
+
+            text = "hello\nworld"
+            t = Lerchen.parse(p,text)
+            tok = t.children[1]
+            @test tok== text
+            @test tok.line== 1
+            @test tok.column== 1
+            @test tok.end_line== 2
+            @test tok.end_column== 6
+        end
+
+        @testset "test_empty_end" begin
+            p = make_lark("""
+                start: b c d
+                b: "B"
+                c: | "C"
+                d: | "D"
+            """)
+            res = Lerchen.parse(p,"B")
+            @test length(res.children)== 3
         end
 
 end

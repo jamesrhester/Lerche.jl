@@ -4,6 +4,7 @@ export Tree, Token, Interpreter,Transformer, visit_children, visit,transform
 export GrammarError, ParseError, UnexpectedToken, UnexpectedCharacters
 export UnexpectedInput
 export Lark
+export @inline_rule, @rule
 #==
 
 Lerchen ("Lark" in German) is a port of the Python Lark package to
