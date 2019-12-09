@@ -53,9 +53,9 @@ update_set(set1,set2) = begin
     if isempty(set2)
         return false
     end
-    backup = copy(set1)
+    old_len = length(set1)
     union!(set1,set2)
-    return set1 != backup
+    return old_len < length(set1)
 end
 """Calculate FOLLOW sets.
 
@@ -166,7 +166,7 @@ expand_rule(g::GrammarAnalyzer,rule) = begin
     init_ptrs = Set()
     _expand_rule(_rule) = begin
         Channel() do rule_chan
-            @assert !_rule.is_term _rule
+            #@assert !_rule.is_term _rule
             for r in g.rules_by_origin[_rule]
                 init_ptr = RulePtr(r,0)
                 push!(init_ptrs,init_ptr)
