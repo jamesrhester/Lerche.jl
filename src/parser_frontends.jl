@@ -38,9 +38,9 @@ parse(p::WithLexer,text) = begin
 end
 
 mutable struct LALR_TraditionalLexer <: WithLexer
-    lexer_conf
-    lexer
-    parser
+    lexer_conf::LexerConf
+    lexer::TraditionalLexer
+    parser::LALRParser
     LALR_TraditionalLexer(lexer_conf,parser_conf;options=nothing) = begin
         if !isnothing(options) debug = options["debug"] else debug = false end
         x = new()

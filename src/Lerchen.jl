@@ -26,12 +26,14 @@ include("exceptions.jl")
 include("common.jl")
 include("grammar.jl")
 include("lexer.jl")
-include("load_grammar.jl")
-include("parser_frontends.jl")
 include("parse_tree_builder.jl")
 include("parsers/grammar_analysis.jl")
 include("parsers/lalr_analysis.jl")
 include("parsers/lalr_parser.jl")
+include("parser_frontends.jl")
+
+include("load_grammar.jl")
+
 include("lark.jl")
 
 end # module

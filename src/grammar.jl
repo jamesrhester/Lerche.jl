@@ -35,22 +35,22 @@ Base.show(io::IO,ls::NonTerminal) = print(io,"NonTerminal($(ls.name))")
 
 NonTerminal(name) = NonTerminal(name,false)
 
+struct RuleOptions
+    keep_all_tokens::Bool
+    expand1::Bool
+    priority::Union{Int,Nothing}
+end
+
+RuleOptions(;keep_all_tokens=false,expand1=false,priority=nothing) = RuleOptions(keep_all_tokens,expand1,priority)
+
 mutable struct Rule
-    origin
-    expansion
-    alias
-    options
+    origin::NonTerminal
+    expansion::Array{LarkSymbol}
+    alias::Union{Nothing,String}
+    options::Union{Nothing,RuleOptions}
 end
 
 Rule(origin,expansion;alias=nothing,options=nothing) = Rule(origin,expansion,alias,options)
 
 Base.show(io::IO,r::Rule) = print(io,"<$(r.origin.name):  $(join(r.expansion," "))>")
-
-struct RuleOptions
-    keep_all_tokens
-    expand1
-    priority
-end
-
-RuleOptions(;keep_all_tokens=false,expand1=false,priority=nothing) = RuleOptions(keep_all_tokens,expand1,priority)
 
