@@ -253,15 +253,14 @@ end
 
 
 struct TraditionalLexer <: Lexer
-    newline_types
-    ignore_types
-    callback
-    terminals
-    mres
+    newline_types::Array{String}
+    ignore_types::Array{String}
+    callback::Dict{String,Function}
+    terminals::Array{TerminalDef}
+    mres::Tuple{Regex,Dict{Int,String}}
 end
 
 TraditionalLexer(terminals;ignore=(),user_callbacks=Dict()) = begin
-    @assert all(t -> typeof(t)==TerminalDef, terminals)
     for t in terminals
         try
             Regex(to_regexp(t.pattern))
@@ -354,45 +353,5 @@ end
 get_channel(l::Lexer) = nothing
 get_channel(l::ContextualLexer) = l.state_source
 
-#== 
-
-TODO. The contextual lexer switches lexers depending on the
-parse state. To do this it creates a separate Lexer object
-based on the current state and then returns a token. After
-returning this token, it switches state ready to lex the
-next token. This is why the _Lex object exists in Python:
-it has mutable lexer and state fields. The Channel has only
-one entry so that the lexer has to wait until the parser
-has processed the token before deciding on which lexer to
-use next.
-
-
-lex(cl::ContextualLexer,stream) = Channel() do lexchan
-    begin
-        # Set the starting state
-        new_state = take!(cl.state_source)
-        l = cl.lexers[new_state]
-        token_src = lex(l[1],stream,cl.root_lexer.newline_types,cl.root_lexer.ignore_types)
-        while true
-            x = nothing
-            try
-                x = take!(token_src)
-            catch e
-                println("Finishing lexing, final status $e")
-                break
-            end
-            tt = time()
-            println("$tt Token: $x")
-            put!(lexchan,x)  #will block until the value is taken by the parser
-            new_state = take!(cl.state_source)
-            tt = time()
-            println("$tt: Now setting the lexer state to $(new_state)")
-            l[1] = cl.lexers[new_state]  #
-            l[2] = new_state
-        end
-    end
-end
-
-==#
 
 lex(cl::ContextualLexer,stream) = lex(cl,stream,cl.root_lexer.newline_types,cl.root_lexer.ignore_types)
