@@ -132,11 +132,11 @@ const RULES = Dict(
 )
 
 mutable struct EBNF_to_BNF <: Transformer_InPlace
-    new_rules
-    rules_by_expr
-    prefix
+    new_rules::Array{Tuple{String,Tree,Any}}
+    rules_by_expr::Dict{Union{String,LarkSymbol,Tree},NonTerminal}
+    prefix::String
     i::Int
-    rule_options
+    rule_options::Union{Nothing,RuleOptions}
 end
 
 EBNF_to_BNF() = EBNF_to_BNF([],Dict(),"anon",0,nothing)
@@ -483,9 +483,9 @@ _choice_of_rules(rules) = Tree("expansions",[Tree("expansion",[Token("RULE",name
 
 # Note order of fields matches call order
 mutable struct Grammar
-    rule_defs
-    term_defs
-    ignore
+    rule_defs::Array{Tuple{String,Tree,RuleOptions}}
+    term_defs::Array{Tuple{String,Tuple{Tree,Int}}}
+    ignore::Array{String}
 end
 
 compile(g::Grammar) = begin
@@ -618,7 +618,7 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
     to_import = Array(collect(bfs(keys(aliases), rule_dependencies)))
     for symbol in to_import
         if symbol.type_ == "TERMINAL"
-            push!(term_defs,[get_namespace_name(symbol), imported_terms[symbol]])
+            push!(term_defs,(get_namespace_name(symbol), imported_terms[symbol]))
         else
             @assert symbol.type_ == "RULE"
             rule = imported_rules[symbol]
@@ -711,7 +711,6 @@ struct PrepareGrammar <:Transformer_InPlace end
 
 mutable struct GrammarLoader
     parser
-    canonize_tree
 end
 
 GrammarLoader() = begin
@@ -728,7 +727,7 @@ GrammarLoader() = begin
     lexer_conf = LexerConf(terminals, ignore=["WS", "COMMENT"])
 
     parser_conf = ParserConf(rules, callback, "start")
-    GrammarLoader(LALR_TraditionalLexer(lexer_conf, parser_conf),CanonizeTree())
+    GrammarLoader(LALR_TraditionalLexer(lexer_conf, parser_conf))
 end
 
 "Parse grammar_text, verify, and create Grammar object. Display nice messages on error."
@@ -736,7 +735,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
     try
         parsetree = parse(gl.parser,grammar_text*"\n")
         #println("Original parse tree:\n$parsetree")
-        tree = transform(gl.canonize_tree,parse(gl.parser,grammar_text*"\n") )
+        tree = transform(CanonizeTree(),parse(gl.parser,grammar_text*"\n") )
     catch e
         if e isa UnexpectedCharacters
             context = get_context(e,grammar_text)
@@ -775,7 +774,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
     @assert length(defs) == 0
 
     term_defs = [if length(td)==3 td else [td[1], 1, td[2]] end for td in term_defs]
-    term_defs = [[name.value, [t, if !(typeof(p) <: Int) Base.parse(Int64,p.value) else p end]] for (name, p, t) in term_defs]
+    term_defs = [(name.value, (t, if !(typeof(p) <: Int) Base.parse(Int64,p.value) else p end)) for (name, p, t) in term_defs]
     rule_defs = [options_from_rule(x[1],x[2:end]...) for x in rule_defs]
 
     #println("Check: term_defs $term_defs\nrule_defs $rule_defs")
@@ -831,7 +830,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
             append!(rule_defs, new_rd)
         elseif stmt.data == "declare"
             for t in stmt.children
-                push!(term_defs,[t.value, (nothing, nothing)])
+                push!(term_defs,(t.value, (nothing, nothing)))
             end
             
         else
@@ -870,7 +869,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
 
         name = "__IGNORE_$(length(ignore_names))"
         push!(ignore_names,name)
-        push!(term_defs,[name, (t, 0)])
+        push!(term_defs,(name, (t, 0)))
     end
     # Verify correctness 2
     terminal_names = Set()
@@ -920,7 +919,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
                     
 # TODO don't include unused terminals, they can only cause trouble!
 
-    #println("Baking it in, baby: Rules $rules\n\nTerm defs: $term_defs\n\nIgnoring: $ignore_names")
+   # println("Baking it in, baby: Rules $rules\n\nTerm defs: $term_defs\n\nIgnoring: $ignore_names")
     return Grammar(rules, term_defs, ignore_names)
 
 end
