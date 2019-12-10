@@ -704,7 +704,10 @@ end
 
 struct PrepareGrammar <:Transformer_InPlace end
 
-@inline_rule terminal(pg::PrepareGrammar, name) = name
+@inline_rule terminal(pg::PrepareGrammar, name) = begin
+    name
+end
+
 
 @inline_rule nonterminal(pg::PrepareGrammar, name) = name
 

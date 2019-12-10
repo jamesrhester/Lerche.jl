@@ -163,8 +163,11 @@ _init_builders(rules,all_tokens,ambiguous,propagate_positions) = Channel() do bu
     end
 end
 
-# A callback is a collection of functions indexed by internal name
-# TODO replace Callback property setting with a Dictionary
+# These callbacks are executed during parsing, as each rule is
+# matched (i.e. the reduction step). If a transformer has been
+# specified, the appropriate method is called; by default a
+# parse tree is constructed using Tree, which can later be
+# visited by transformers or visitors.
 
 create_callback(ptb::ParseTreeBuilder;transformer=nothing) = begin
     callback = Dict()
@@ -176,7 +179,7 @@ create_callback(ptb::ParseTreeBuilder;transformer=nothing) = begin
         # Now find the actual transformer function ...
         user_callback_name = if rule.alias != nothing rule.alias else rule.origin.name end
         if have_method(transformer,user_callback_name)
-            f = get_method(transformer,user_callback_name)
+            f = partial(get_method(transformer,user_callback_name),transformer)
         else
             f = partial(Tree,user_callback_name)
         end

@@ -58,12 +58,7 @@ _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
     else
         return __default__(t,tr.data,children,tr._meta)
     end
-    if is_inline(t,f)
-        return get_method(t,f)(t,children...)
-    else
-        return get_method(t,f)(t,children)
-    end
-    
+    return get_method(t,f)(t,children)
 end
 
 _transform_children(t::Transformer,children) = Channel() do chan

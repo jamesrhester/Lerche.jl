@@ -86,7 +86,6 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
         
         value = p.callbacks[rule](s)
 
-        # println("Callback for $rule executed to obtain value $value")
         _action, new_state = states[state_stack[end]][rule.origin.name]
         @assert _action == Shift
         push!(state_stack,new_state)

@@ -1,7 +1,7 @@
 export have_method, invoke_callback, _rule_dict, @rule
 
-const _rule_dict = Dict()
-const _inline_list = []
+const _rule_dict = Dict{Tuple,Function}()
+const _inline_list = Tuple[]
 
 ## Is this a Julia builtin?
 classify_bool(seq, pred) = begin
@@ -115,7 +115,8 @@ macro add_rules(s)
 end
 
 """
-Flag that the following method is a rule. Usage: @rule rule_name(args...) = begin .... end
+Flag that the following method is a rule. Usage: @rule rule_name(t::Type,args) = begin .... end.
+There can only be one argument after the type argument, which will be the tree children.
 """
 
 macro rule(s)
@@ -144,7 +145,7 @@ macro inline_rule(s)
     rule_type = s.args[1].args[2].args[2] # the type name
     println("Inline rule name: $rule_name, Rule type $rule_type")
     quote
-        _rule_dict[($rule_name,$(esc(rule_type)))] = $(esc(s))
+        _rule_dict[($rule_name,$(esc(rule_type)))] = (x,y) -> $(esc(s))(x,y...)
         push!(_inline_list,($rule_name,$(esc(rule_type))))
     end
 end
