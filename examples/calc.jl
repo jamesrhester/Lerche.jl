@@ -4,7 +4,7 @@
 # Comparison with Lark
 #
 
-using Lerchen
+using Lerche
 
 
 calc_grammar = """
@@ -52,7 +52,7 @@ end
 @rule neg(s::CalculateTree, nums) = -1*nums[1]
 
 calc_parser = Lark(calc_grammar, parser="lalr", transformer=CalculateTree())
-calc(a::String) = Lerchen.parse(calc_parser,a)
+calc(a::String) = Lerche.parse(calc_parser,a)
 
 
 test() = begin

@@ -1,4 +1,4 @@
-module Lerchen
+module Lerche
 
 export Tree, Token, Interpreter,Transformer, visit_children, visit,transform
 export GrammarError, ParseError, UnexpectedToken, UnexpectedCharacters
@@ -7,7 +7,7 @@ export Lark
 export @inline_rule, @rule
 #==
 
-Lerchen ("Lark" in German) is a port of the Python Lark package to
+Lerche ("Lark" in German) is a port of the Python Lark package to
 native Julia. No I don't speak German.
 
 A number of simplifications have been made:

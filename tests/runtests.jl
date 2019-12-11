@@ -1,4 +1,4 @@
-using Lerchen
+using Lerche
 using Test
 
 include("trees.jl")

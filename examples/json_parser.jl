@@ -4,7 +4,7 @@
 # Adapted from the Lark example
 #
 
-using Lerchen
+using Lerche
 using JSON
 
 # Note the change in grammar vs Python: we do not
@@ -63,7 +63,7 @@ test() = begin
         }
     """
 
-    j = Lerchen.parse(json_parser,test_json)
+    j = Lerche.parse(json_parser,test_json)
     println(j)
     k = JSON.parse(test_json)
     println(k)

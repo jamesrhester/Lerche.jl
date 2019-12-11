@@ -4,16 +4,16 @@
                     a: "a"
                  """, lexer="standard",parser="lalr",propagate_positions=true)
 
-    r = Lerchen.parse(g,"a")
-    println("$(Lerchen.meta(r.children[1]))")
-    @test Lerchen.meta(r.children[1]).line == 1
+    r = Lerche.parse(g,"a")
+    println("$(Lerche.meta(r.children[1]))")
+    @test Lerche.meta(r.children[1]).line == 1
 
 end
 ==#
 
 #== The following tests copy those in lark.py with the following exceptions:
 (1) No unicode tests (Julia is natively unicode)
-(2) No CYK/Earley/Dynamic lexer/skipped tests (not implemented in Lerchen)
+(2) No CYK/Earley/Dynamic lexer/skipped tests (not implemented in Lerche)
 (3) 
 
 ==#
@@ -25,8 +25,8 @@ end
                     a: "a"
                  """, lexer="standard",parser="lalr",propagate_positions=true)
 
-    r = Lerchen.parse(g,"a")
-    @test_skip Lerchen.meta(r.children[1]).line == 1
+    r = Lerche.parse(g,"a")
+    @test_skip Lerche.meta(r.children[1]).line == 1
 
 end
 
@@ -50,7 +50,7 @@ make_parser_test(lexer,parser) = begin
                     b: "x"
                  """,parser="lalr",lexer="standard",debug=true)
 
-    r = Lerchen.parse(g,"x")
+    r = Lerche.parse(g,"x")
     @test r.children[1].data == "b"
     
     g = Lark("""start: a
@@ -58,7 +58,7 @@ make_parser_test(lexer,parser) = begin
                     b: "x"
                  """,parser="lalr",lexer="standard")
 
-    r = Lerchen.parse(g,"x")
+    r = Lerche.parse(g,"x")
     
     @test r.children[1].data == "c"
 
@@ -66,14 +66,14 @@ make_parser_test(lexer,parser) = begin
                         ?a: B -> c
                         B: "x"
                      """,parser="lalr",lexer="standard")
-    r = Lerchen.parse(g,"x")
+    r = Lerche.parse(g,"x")
     @test r.children[1].data == "c"
 
     g = Lark("""start: a
                     ?a: b b -> c
                     b: "x"
                  """,parser="lalr",lexer="standard")
-    r = Lerchen.parse(g,"xx")
+    r = Lerche.parse(g,"xx")
     @test r.children[1].data == "c" 
 
     end
@@ -84,11 +84,11 @@ make_parser_test(lexer,parser) = begin
                         a: "a"
                      """,debug=true)
 
-    r = Lerchen.parse(g,"aaabaab")
+    r = Lerche.parse(g,"aaabaab")
     @test join([x.data for x in r.children],"") == "aaabaa"
-    r = Lerchen.parse(g,"aaabaaba")
+    r = Lerche.parse(g,"aaabaaba")
     @test join([x.data for x in r.children],"") == "aaabaaa"    
-    @test_throws UnexpectedToken Lerchen.parse(g, "aaabaa")
+    @test_throws UnexpectedToken Lerche.parse(g, "aaabaa")
     end
     
     @testset "Test_basic2 ($lexer, $parser)" begin
@@ -96,14 +96,14 @@ make_parser_test(lexer,parser) = begin
         g = make_lark("""start: B A
                          B: "12"
                          A: "1" """)
-        x = Lerchen.parse(g,"121")
+        x = Lerche.parse(g,"121")
         @test x.data == "start"
         @test x.children == ["12", "1"]
 
         g2 = make_lark("""start: B A
                          B: "12"
                          A: "2" """)
-        x = Lerchen.parse(g2,"122")
+        x = Lerche.parse(g2,"122")
         @test x.data == "start" && x.children == ["12", "2"]
     end
 
@@ -111,7 +111,7 @@ make_parser_test(lexer,parser) = begin
         g = make_lark("""start: a+
                          a : "a" """)
 
-        Lerchen.parse(g, repeat("a",500))
+        Lerche.parse(g, repeat("a",500))
     end
 
     @testset "Expand lists with one item" begin
@@ -120,7 +120,7 @@ make_parser_test(lexer,parser) = begin
                             item : A
                             A: "a"
                         """)
-        r = Lerchen.parse(g,"a")
+        r = Lerche.parse(g,"a")
 
         # because 'list' is an expand-if-contains-one rule and we only provided one element it should have expanded to 'item'
         @test [subtree.data for subtree in r.children] == ["item"]
@@ -134,7 +134,7 @@ make_parser_test(lexer,parser) = begin
                             item : A
                             A: "a"
                         """)
-            r = Lerchen.parse(g,"a!")
+            r = Lerche.parse(g,"a!")
 
             # because 'list' is an expand-if-contains-one rule and we only provided one element it should have expanded to 'item'
         @test [subtree.data for subtree in r.children] == ["item"]
@@ -150,7 +150,7 @@ make_parser_test(lexer,parser) = begin
                                 item : A
                                 A: "a"
                             """)
-        r = Lerchen.parse(g,"aa")
+        r = Lerche.parse(g,"aa")
 
         # because 'list' is an expand-if-contains-one rule and we've provided more than one element it should *not* have expanded
         @test [subtree.data for subtree in r.children] == ["list"]
@@ -169,7 +169,7 @@ make_parser_test(lexer,parser) = begin
                                 item : A
                                 A: "a"
                             """)
-        r = Lerchen.parse(g,"aa!")
+        r = Lerche.parse(g,"aa!")
 
         # because 'list' is an expand-if-contains-one rule and we've provided more than one element it should *not* have expanded
         @test [subtree.data for subtree in r.children] == ["list"]
@@ -188,7 +188,7 @@ make_parser_test(lexer,parser) = begin
                                 item : A
                                 A: "a"
                              """)
-        r = Lerchen.parse(g,"")
+        r = Lerche.parse(g,"")
 
         # because 'list' is an expand-if-contains-one rule and we've provided less than one element (i.e. none) it should *not* have expanded
         @test [subtree.data for subtree in r.children] == ["list"]
@@ -207,7 +207,7 @@ make_parser_test(lexer,parser) = begin
                             item : A
                             A: "a"
                          """)
-            r = Lerchen.parse(g,"")
+            r = Lerche.parse(g,"")
         # because 'list' is an expand-if-contains-one rule and we've provided less than one element (i.e. none) it should *not* have expanded
         @test [subtree.data for subtree in r.children] == ["list"]
 
@@ -225,7 +225,7 @@ make_parser_test(lexer,parser) = begin
                             item : A
                             A: "a"
                          """)
-            r = Lerchen.parse(g,"")
+            r = Lerche.parse(g,"")
 
             # Because 'list' is a flatten rule it's top-level element should *never* be expanded
             @test [subtree.data for subtree in r.children] == ["list"]
@@ -241,9 +241,9 @@ make_parser_test(lexer,parser) = begin
                         NAME: /\w/+
                         %ignore " "
                     """)
-            x = Lerchen.parse(g,"Hello World")
+            x = Lerche.parse(g,"Hello World")
             @test x.children == ["World"]
-            x = Lerchen.parse(g,"Hello HelloWorld")
+            x = Lerche.parse(g,"Hello HelloWorld")
             @test x.children == ["HelloWorld"]
     end
   
@@ -253,9 +253,9 @@ make_parser_test(lexer,parser) = begin
                         %import common.WS
                         %ignore WS
                     """)
-            x = Lerchen.parse(g,"Hello World")
+            x = Lerche.parse(g,"Hello World")
             @test x.children == ["World"]
-            x = Lerchen.parse(g,"Hello HelloWorld")
+            x = Lerche.parse(g,"Hello HelloWorld")
         @test x.children == ["HelloWorld"]
     end
 
@@ -264,7 +264,7 @@ make_parser_test(lexer,parser) = begin
                     !start: "starts"
                     %import common.LCASE_LETTER
                     """)
-            x = Lerchen.parse(g,"starts")
+            x = Lerche.parse(g,"starts")
         @test x.children == ["starts"]
     end
 
@@ -280,16 +280,16 @@ make_parser_test(lexer,parser) = begin
     @testset "test_rule_collision" begin
             g = make_lark("""start: "a"+ "b"
                              | "a"+ """)
-            x = Lerchen.parse(g,"aaaa")
-            x = Lerchen.parse(g,"aaaab")
+            x = Lerche.parse(g,"aaaa")
+            x = Lerche.parse(g,"aaaab")
     end
     
     @testset "test_rule_collision2" begin
             g = make_lark("""start: "a"* "b"
                              | "a"+ """)
-            x = Lerchen.parse(g,"aaaa")
-            x = Lerchen.parse(g,"aaaab")
-            x = Lerchen.parse(g,"b")
+            x = Lerche.parse(g,"aaaa")
+            x = Lerche.parse(g,"aaaab")
+            x = Lerche.parse(g,"b")
     end
 
     @testset "test_token_not_anon" begin
@@ -298,38 +298,38 @@ make_parser_test(lexer,parser) = begin
 
             g = make_lark("""start: "a"
                         A: "a" """)
-            x = Lerchen.parse(g,"a")
+            x = Lerche.parse(g,"a")
             @test length(x.children)==0 #(" \"a\" should be considered anonymous")
 
             g = make_lark("""start: "a" A
                         A: "a" """)
-            x = Lerchen.parse(g,"aa")
+            x = Lerche.parse(g,"aa")
             @test length(x.children)==1 #("only \"a\" should be considered anonymous")
             @test x.children[1].type_== "A"
 
             g = make_lark("""start: /a/
                         A: /a/ """)
-            x = Lerchen.parse(g,"a")
+            x = Lerche.parse(g,"a")
             @test length(x.children)== 1
             @test x.children[1].type_== "A" # ("A isn't associated with /a/")
     end
     
         @testset "test_maybe" begin
             g = make_lark("""start: ["a"] """)
-            x = Lerchen.parse(g,"a")
-            x = Lerchen.parse(g,"")
+            x = Lerche.parse(g,"a")
+            x = Lerche.parse(g,"")
         end
             
         @testset "test_start" begin
             g = make_lark("""a: "a" a? """, start="a")
-            x = Lerchen.parse(g,"a")
-            x = Lerchen.parse(g,"aa")
-            x = Lerchen.parse(g,"aaa")
+            x = Lerche.parse(g,"a")
+            x = Lerche.parse(g,"aa")
+            x = Lerche.parse(g,"aaa")
         end
     
         @testset "test_alias" begin
             g = make_lark("""start: "a" -> b """)
-            x = Lerchen.parse(g,"a")
+            x = Lerche.parse(g,"a")
             @test x.data== "b"
         end
     
@@ -337,8 +337,8 @@ make_parser_test(lexer,parser) = begin
             g = make_lark("""start: A
                       A: "a"* ("b"? "c".."e")+
                       """)
-            x = Lerchen.parse(g,"abcde")
-            x = Lerchen.parse(g,"dd")
+            x = Lerche.parse(g,"abcde")
+            x = Lerche.parse(g,"dd")
         end
     
     @testset "test_backslash" begin
@@ -346,21 +346,21 @@ make_parser_test(lexer,parser) = begin
         # due to different treatment of raw strings
             g = make_lark(raw"""start: "\\\\" "a"
                       """)
-            x = Lerchen.parse(g,raw"\a")
+            x = Lerche.parse(g,raw"\a")
 
             g = make_lark(raw"""start: /\\/ /a/
                       """)
-            x = Lerchen.parse(g,raw"\a")
+            x = Lerche.parse(g,raw"\a")
         end
     
         @testset "test_special_chars" begin
             g = make_lark(raw"""start: "\n"
                       """)
-            x = Lerchen.parse(g,"\n")
+            x = Lerche.parse(g,"\n")
 
             g = make_lark(raw"""start: /\n/
                       """)
-            x = Lerchen.parse(g,"\n")
+            x = Lerche.parse(g,"\n")
         end
 
     @testset "test_backslash2" begin
@@ -368,11 +368,11 @@ make_parser_test(lexer,parser) = begin
         # due to different treatment of raw strings
             g = make_lark(raw"""start: "\\"" "-"
                       """)
-            x = Lerchen.parse(g,"\"-")
+            x = Lerche.parse(g,"\"-")
 
             g = make_lark(raw"""start: /\// /-/
                       """)
-            x = Lerchen.parse(g,"/-")
+            x = Lerche.parse(g,"/-")
         end
     
         # @testset "test_token_recurse" begin
@@ -388,7 +388,7 @@ make_parser_test(lexer,parser) = begin
                           a: _empty "A"
                           _empty:
                             """)
-            x = Lerchen.parse(g,"AB")
+            x = Lerche.parse(g,"AB")
         end
     
         @testset "test_regex_quote" begin
@@ -399,8 +399,8 @@ make_parser_test(lexer,parser) = begin
             """
 
             g = make_lark(g)
-            @test  Lerchen.parse(g,"\"hello\"").children == ["\"hello\""]
-            @test  Lerchen.parse(g,"'hello'").children == ["'hello'"]
+            @test  Lerche.parse(g,"\"hello\"").children == ["\"hello\""]
+            @test  Lerche.parse(g,"'hello'").children == ["'hello'"]
         end
 
         @testset "test_float_without_lexer" begin
@@ -410,15 +410,15 @@ make_parser_test(lexer,parser) = begin
                          exp: ("e"|"E") ["+"|"-"] digit+
                          digit: "0"|"1"|"2"|"3"|"4"|"5"|"6"|"7"|"8"|"9"
                       """)
-            Lerchen.parse(g,"1.2")
-            Lerchen.parse(g,"-.2e9")
-            Lerchen.parse(g,"+2e-9")
-            @test_throws UnexpectedToken Lerchen.parse(g,"+2e-9e")
+            Lerche.parse(g,"1.2")
+            Lerche.parse(g,"-.2e9")
+            Lerche.parse(g,"+2e-9")
+            @test_throws UnexpectedToken Lerche.parse(g,"+2e-9e")
         end
             
         @testset "test_keep_all_tokens" begin
             l = make_lark("""start: "a"+ """, keep_all_tokens=true)
-            tree = Lerchen.parse(l,"aaa")
+            tree = Lerche.parse(l,"aaa")
             @test tree.children == ["a", "a", "a"]
         end
 
@@ -426,13 +426,13 @@ make_parser_test(lexer,parser) = begin
             l = make_lark("""!start: "a"i+
                       """
                       )
-            tree = Lerchen.parse(l,"aA")
+            tree = Lerche.parse(l,"aA")
             @test tree.children == ["a", "A"]
 
             l = make_lark("""!start: /a/i+
                       """
                       )
-            tree = Lerchen.parse(l,"aA")
+            tree = Lerche.parse(l,"aA")
             @test tree.children == ["a", "A"]
 
             # g = """!start: "a"i "a"
@@ -447,9 +447,9 @@ make_parser_test(lexer,parser) = begin
                    NAME: /[a-z_]/i /[a-z0-9_]/i*
                 """
             l = make_lark(g)
-            tree = Lerchen.parse(l,"ab,a")
+            tree = Lerche.parse(l,"ab,a")
             @test tree.children == ["ab"]
-            tree = Lerchen.parse(l,"AB,a")
+            tree = Lerche.parse(l,"AB,a")
             @test tree.children == ["AB"]
         end
 
@@ -458,7 +458,7 @@ make_parser_test(lexer,parser) = begin
                       ABC: "abc"i
                       """
                       )
-            tree = Lerchen.parse(l,"aBcAbC")
+            tree = Lerche.parse(l,"aBcAbC")
             @test tree.children == ["aBc", "AbC"]
         end
 
@@ -466,7 +466,7 @@ make_parser_test(lexer,parser) = begin
             g = """!start: ("a"i | /a/ /b/?)+
                 """
             l = make_lark(g)
-            tree = Lerchen.parse(l,"aA")
+            tree = Lerche.parse(l,"aA")
             @test tree.children == ["a", "A"]
         end
 
@@ -474,10 +474,10 @@ make_parser_test(lexer,parser) = begin
             g = """!start: [["A"]]
                 """
             l = make_lark(g)
-            tree = Lerchen.parse(l,"A")
+            tree = Lerche.parse(l,"A")
             @test tree.children == ["A"]
 
-            tree = Lerchen.parse(l,"")
+            tree = Lerche.parse(l,"")
             @test tree.children == []
         end
 
@@ -501,7 +501,7 @@ make_parser_test(lexer,parser) = begin
                 !bc: "B\nC"
                 """
             l = make_lark(g)
-            a, bc, d = Lerchen.parse(l,"AB\nCD").children
+            a, bc, d = Lerche.parse(l,"AB\nCD").children
             @test a.line== 1
             @test a.column== 1
 
@@ -533,7 +533,7 @@ make_parser_test(lexer,parser) = begin
 
             """, start="term")
 
-            tree = Lerchen.parse(l,"aa")
+            tree = Lerche.parse(l,"aa")
             @test length(tree.children)== 2
         end
 
@@ -549,7 +549,7 @@ make_parser_test(lexer,parser) = begin
             AB: "ab"
             """
             l = make_lark(grammar)
-            res = Lerchen.parse(l,"ab")
+            res = Lerche.parse(l,"ab")
 
             @test res.children== ["a", "b"]
             @test res.children!= ["ab"]
@@ -561,7 +561,7 @@ make_parser_test(lexer,parser) = begin
             AB.3: "ab"
             """
             l = make_lark(grammar)
-            res = Lerchen.parse(l,"ab")
+            res = Lerche.parse(l,"ab")
 
             @test res.children != ["a", "b"]
             @test res.children == ["ab"]
@@ -578,7 +578,7 @@ make_parser_test(lexer,parser) = begin
 
             """
             l = make_lark(grammar)
-            x = Lerchen.parse(l,"12 elephants")
+            x = Lerche.parse(l,"12 elephants")
             @test x.children== ["12", "elephants"]
         end
 
@@ -593,7 +593,7 @@ make_parser_test(lexer,parser) = begin
 
             """
             l = make_lark(grammar)
-            x = Lerchen.parse(l,"12 lions")
+            x = Lerche.parse(l,"12 lions")
             @test x.children == ["12", "lions"]
         end
 
@@ -606,7 +606,7 @@ make_parser_test(lexer,parser) = begin
 
             """
             l = make_lark(grammar)
-            x = Lerchen.parse(l,"12 toucans")
+            x = Lerche.parse(l,"12 toucans")
             @test x.children == ["12", "toucans"]
         end
 
@@ -619,7 +619,7 @@ make_parser_test(lexer,parser) = begin
 
            """
             l = make_lark(grammar)
-            x = Lerchen.parse(l,"12 capybaras")
+            x = Lerche.parse(l,"12 capybaras")
             @test x.children== ["12", "capybaras"]
         end
 
@@ -644,13 +644,13 @@ make_parser_test(lexer,parser) = begin
                    a: "±a"
                 """
             l = make_lark(g)
-            @test Lerchen.parse(l,"±a") == Tree("start", [Tree("a", [])])
+            @test Lerche.parse(l,"±a") == Tree("start", [Tree("a", [])])
 
             g = """start: A
                    A: "±a"
                 """
             l = make_lark(g)
-            @test Lerchen.parse(l,"±a") ==Tree("start", [Token("A","±a")])
+            @test Lerche.parse(l,"±a") ==Tree("start", [Token("A","±a")])
         end
 
         @testset "test_ignore" begin
@@ -664,15 +664,15 @@ make_parser_test(lexer,parser) = begin
 
             p = make_lark(g)
 
-            tree = Lerchen.parse(p,"int 1 ! This is a comment\n")
+            tree = Lerche.parse(p,"int 1 ! This is a comment\n")
             @test tree.children == ["1"]
-            tree = Lerchen.parse(p,"int 1 ! This is a comment")    # A trailing ignore token can be tricky!
+            tree = Lerche.parse(p,"int 1 ! This is a comment")    # A trailing ignore token can be tricky!
             @test tree.children == ["1"]
 
             p = make_lark(raw"""
                 start : "a"*
                 %ignore "b" """)
-            tree = Lerchen.parse(p,"bb")
+            tree = Lerche.parse(p,"bb")
             
             @test tree.children == []
         end
@@ -680,56 +680,56 @@ make_parser_test(lexer,parser) = begin
 
         @testset "test_regex_escaping" begin
             g = make_lark("start: /[ab]/")
-            Lerchen.parse(g,"a")
-            Lerchen.parse(g,"b")
+            Lerche.parse(g,"a")
+            Lerche.parse(g,"b")
 
-            @test_throws  UnexpectedInput Lerchen.parse(g, "c")
+            @test_throws  UnexpectedInput Lerche.parse(g, "c")
 
             g = make_lark(raw"start: /\w/")
-            Lerchen.parse(g,"a")
+            Lerche.parse(g,"a")
 
             g = make_lark(raw"start: /\\w/")
-            @test_throws  UnexpectedInput Lerchen.parse(g,"a")
-            Lerchen.parse(g,raw"\w")
+            @test_throws  UnexpectedInput Lerche.parse(g,"a")
+            Lerche.parse(g,raw"\w")
 
-            Lerchen.parse(make_lark(raw"""start: /\[/"""),"[")
+            Lerche.parse(make_lark(raw"""start: /\[/"""),"[")
 
-            Lerchen.parse(make_lark(raw"start: /\//"),"/")
+            Lerche.parse(make_lark(raw"start: /\//"),"/")
 
-            Lerchen.parse(make_lark(raw"start: /\\/"),"\\")
+            Lerche.parse(make_lark(raw"start: /\\/"),"\\")
 
-            Lerchen.parse(make_lark(raw"start: /\[ab]/"),"[ab]")
+            Lerche.parse(make_lark(raw"start: /\[ab]/"),"[ab]")
 
-            Lerchen.parse(make_lark(raw"start: /\\[ab]/"),"\\a")
+            Lerche.parse(make_lark(raw"start: /\\[ab]/"),"\\a")
 
-            Lerchen.parse(make_lark(raw"start: /\t/"),"\t")
+            Lerche.parse(make_lark(raw"start: /\t/"),"\t")
 
-            Lerchen.parse(make_lark(raw"start: /\\t/"),"\\t")
+            Lerche.parse(make_lark(raw"start: /\\t/"),"\\t")
 
-            Lerchen.parse(make_lark(raw"start: /\\\t/"),"\\\t")
+            Lerche.parse(make_lark(raw"start: /\\\t/"),"\\\t")
 
-            Lerchen.parse(make_lark(raw"""start: "\t" """),"\t")
+            Lerche.parse(make_lark(raw"""start: "\t" """),"\t")
 
-            Lerchen.parse(make_lark(raw"""start: "\\t" """),"\\t")
+            Lerche.parse(make_lark(raw"""start: "\\t" """),"\\t")
 
-            Lerchen.parse(make_lark(raw"""start: "\\\t" """),"\\\t")
+            Lerche.parse(make_lark(raw"""start: "\\\t" """),"\\\t")
         end
 
         @testset "test_ranged_repeat_rules" begin
             g = """!start: "A"~3
                 """
             l = make_lark(g)
-            @test Lerchen.parse(l,"AAA")== Tree("start", ["A", "A", "A"])
-            @test_throws UnexpectedInput Lerchen.parse(l, "AA")
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAAA")
+            @test Lerche.parse(l,"AAA")== Tree("start", ["A", "A", "A"])
+            @test_throws UnexpectedInput Lerche.parse(l, "AA")
+            @test_throws UnexpectedInput Lerche.parse(l, "AAAA")
 
             g = """!start: "A"~0..2
                 """
             l = make_lark(g)
-            @test Lerchen.parse(l,"")== Tree("start", [])
-            @test Lerchen.parse(l,"A")== Tree("start", ["A"])
-            @test Lerchen.parse(l,"AA")== Tree("start", ["A", "A"])
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAA")
+            @test Lerche.parse(l,"")== Tree("start", [])
+            @test Lerche.parse(l,"A")== Tree("start", ["A"])
+            @test Lerche.parse(l,"AA")== Tree("start", ["A", "A"])
+            @test_throws UnexpectedInput Lerche.parse(l, "AAA")
 
             g = """!start: "A"~3..2
                 """
@@ -738,12 +738,12 @@ make_parser_test(lexer,parser) = begin
             g = """!start: "A"~2..3 "B"~2
                 """
             l = make_lark(g)
-            @test Lerchen.parse(l,"AABB")== Tree("start", ["A", "A", "B", "B"])
-            @test Lerchen.parse(l,"AAABB")== Tree("start", ["A", "A", "A", "B", "B"])
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAAB")
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAABBB")
-            @test_throws UnexpectedInput Lerchen.parse(l, "ABB")
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAAABB")
+            @test Lerche.parse(l,"AABB")== Tree("start", ["A", "A", "B", "B"])
+            @test Lerche.parse(l,"AAABB")== Tree("start", ["A", "A", "A", "B", "B"])
+            @test_throws UnexpectedInput Lerche.parse(l, "AAAB")
+            @test_throws UnexpectedInput Lerche.parse(l, "AAABBB")
+            @test_throws UnexpectedInput Lerche.parse(l, "ABB")
+            @test_throws UnexpectedInput Lerche.parse(l, "AAAABB")
         end
 
         @testset "test_ranged_repeat_terms" begin
@@ -751,22 +751,22 @@ make_parser_test(lexer,parser) = begin
                     AAA: "A"~3
                 """
             l = make_lark(g)
-            @test Lerchen.parse(l,"AAA")== Tree("start", ["AAA"])
-            @test_throws UnexpectedInput Lerchen.parse(l, "AA")
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAAA")
+            @test Lerche.parse(l,"AAA")== Tree("start", ["AAA"])
+            @test_throws UnexpectedInput Lerche.parse(l, "AA")
+            @test_throws UnexpectedInput Lerche.parse(l, "AAAA")
 
             g = """!start: AABB CC
                     AABB: "A"~0..2 "B"~2
                     CC: "C"~1..2
                 """
             l = make_lark(g)
-            @test Lerchen.parse(l,"AABBCC")== Tree("start", ["AABB", "CC"])
-            @test Lerchen.parse(l,"BBC")== Tree("start", ["BB", "C"])
-            @test Lerchen.parse(l,"ABBCC")== Tree("start", ["ABB", "CC"])
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAAB")
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAABBB")
-            @test_throws UnexpectedInput Lerchen.parse(l, "ABB")
-            @test_throws UnexpectedInput Lerchen.parse(l, "AAAABB")
+            @test Lerche.parse(l,"AABBCC")== Tree("start", ["AABB", "CC"])
+            @test Lerche.parse(l,"BBC")== Tree("start", ["BB", "C"])
+            @test Lerche.parse(l,"ABBCC")== Tree("start", ["ABB", "CC"])
+            @test_throws UnexpectedInput Lerche.parse(l, "AAAB")
+            @test_throws UnexpectedInput Lerche.parse(l, "AAABBB")
+            @test_throws UnexpectedInput Lerche.parse(l, "ABB")
+            @test_throws UnexpectedInput Lerche.parse(l, "AAAABB")
         end
 
         @testset "test_priority_vs_embedded" begin
@@ -777,7 +777,7 @@ make_parser_test(lexer,parser) = begin
             start: (A | WORD)+
             """
             l = make_lark(g)
-            t = Lerchen.parse(l,"abc")
+            t = Lerche.parse(l,"abc")
             @test t.children== ["a", "bc"]
             @test t.children[1].type_ == "A"
         end
@@ -786,7 +786,7 @@ make_parser_test(lexer,parser) = begin
             p = make_lark("start: /[^x]+/")
 
             text = "hello\nworld"
-            t = Lerchen.parse(p,text)
+            t = Lerche.parse(p,text)
             tok = t.children[1]
             @test tok== text
             @test tok.line== 1
@@ -802,7 +802,7 @@ make_parser_test(lexer,parser) = begin
                 c: | "C"
                 d: | "D"
             """)
-            res = Lerchen.parse(p,"B")
+            res = Lerche.parse(p,"B")
             @test length(res.children)== 3
         end
 
@@ -824,7 +824,7 @@ end
                     b: "x"
                  """,parser="lalr",debug=true)
 
-    r = Lerchen.parse(g,"x")
+    r = Lerche.parse(g,"x")
     @test r.children[1].data == "b"
     
     g = Lark("""start: a
@@ -832,7 +832,7 @@ end
                     b: "x"
                  """)
 
-    r = Lerchen.parse("x")
+    r = Lerche.parse("x")
     
     @test r.children[1].data == "c"
 
@@ -840,14 +840,14 @@ end
                         ?a: B -> c
                         B: "x"
                      """)
-    r = Lerchen.parse("x")
+    r = Lerche.parse("x")
     @test r.children[1].data == "c"
 
     g = Lark("""start: a
                     ?a: b b -> c
                     b: "x"
                  """)
-    r = Lerchen.parse("xx")
+    r = Lerche.parse("xx")
     @test r.children[1].data, "c" )
 
 end

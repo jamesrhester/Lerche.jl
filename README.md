@@ -6,7 +6,7 @@ Python to Julia.  Lark grammars should work unchanged in Lerche.
 # Quick start for Lark users
 
 Please read the Lark documentation.  When converting from Lark programs written
-in Python to Lerchen programs written in Julia, the following changes are necessary:
+in Python to Lerche programs written in Julia, the following changes are necessary:
 
 1. All classes become types
 2. All class method calls become Julia method calls with the type as the first argument
