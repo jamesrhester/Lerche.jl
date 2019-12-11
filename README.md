@@ -1,6 +1,6 @@
 # Introduction
 
-Lerchen (German for Lark) is a partial port of the Lark grammar processor from
+Lerche (German for Lark) is a partial port of the Lark grammar processor from
 Python to Julia.  Lark grammars should work unchanged in Lerchen.
 
 # Quick start for Lark users
@@ -22,7 +22,7 @@ desired transformation/visitor type.
 
 ## Grammars
 
-Lark grammars should work unchanged in Lerchen, with the caveats
+Lark grammars should work unchanged in Lerche, with the caveats
 below.  Note that this guarantee applies only to the sequence of
 characters after interpretation by the Julia/Python language parser.
 In particular note the following differences:
@@ -118,12 +118,12 @@ Finally, we create our parser by calling the ``Lark`` constructor:
 json_parser = Lark(json_grammar, parser="lalr", lexer="standard", transformer=TreeToJson())
 ```
 
-Now, we can parse JSON by calling the ``Lerchen.parse`` method with
+Now, we can parse JSON by calling the ``Lerche.parse`` method with
 ``json_parser`` as the first argument and the text to parse as the
 second argument:
 
 ```
-j = Lerchen.parse(json_parser,test_json)
+j = Lerche.parse(json_parser,test_json)
 ```
 
 The above example is available in the Examples directory for
@@ -146,7 +146,7 @@ an UnexpectedCharacter if a message is included.
 
 # Implementation notes
 
-Lerchen is currently noticeably slower than Lark, despite the
+Lerche is currently noticeably slower than Lark, despite the
 advantages of Julia's compilation. There is still plenty of room for
 improvement as no effort has been made to use Julia efficiency tricks.
 The priority has been on maintaining fidelity with Lark.
