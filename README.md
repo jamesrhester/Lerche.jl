@@ -1,7 +1,7 @@
 # Introduction
 
 Lerche (German for Lark) is a partial port of the Lark grammar processor from
-Python to Julia.  Lark grammars should work unchanged in Lerchen.
+Python to Julia.  Lark grammars should work unchanged in Lerche.
 
 # Quick start for Lark users
 
