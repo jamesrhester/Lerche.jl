@@ -570,7 +570,7 @@ import_grammar(grammar_path;base_paths=[]) = begin
         append!(import_paths,IMPORT_PATHS)
         text = nothing
         for import_path in import_paths
-            println("Trying $import_path (out of $IMPORT_PATHS)")
+            #println("Trying $import_path (out of $IMPORT_PATHS)")
             try
                 Base.open(joinpath(import_path,grammar_path),"r") do f
                     text = read(f,String)
@@ -816,7 +816,6 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
             if path_node.data == "import_lib"  # Import from library
                 g = import_grammar(grammar_path)
             else  # Relative import
-                println("Grammar name is $grammar_name")
                 if grammar_name == "<string>"  # Import relative to script file path if grammar is coded in script
                     base_file = abspath(PROGRAM_FILE)
                 else

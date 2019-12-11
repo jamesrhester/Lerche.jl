@@ -1,7 +1,6 @@
 export have_method, invoke_callback, _rule_dict, @rule
 
 const _rule_dict = Dict{Tuple,Function}()
-const _inline_list = Tuple[]
 
 ## Is this a Julia builtin?
 classify_bool(seq, pred) = begin
@@ -125,7 +124,7 @@ macro rule(s)
     end    
     rule_name = String(s.args[1].args[1])
     rule_type = s.args[1].args[2].args[2] # the type name
-    println("Rule name: $rule_name, Rule type $rule_type")
+    #println("Rule name: $rule_name, Rule type $rule_type")
     quote
         _rule_dict[($rule_name,$(esc(rule_type)))] = $(esc(s))
     end
@@ -143,13 +142,11 @@ macro inline_rule(s)
     end    
     rule_name = String(s.args[1].args[1])
     rule_type = s.args[1].args[2].args[2] # the type name
-    println("Inline rule name: $rule_name, Rule type $rule_type")
+    #println("Inline rule name: $rule_name, Rule type $rule_type")
     quote
         _rule_dict[($rule_name,$(esc(rule_type)))] = (x,y) -> $(esc(s))(x,y...)
-        push!(_inline_list,($rule_name,$(esc(rule_type))))
     end
 end
 
 have_method(t,meth_name) = haskey(_rule_dict,(meth_name,typeof(t)))
 get_method(t,meth_name) = _rule_dict[(meth_name,typeof(t))]
-is_inline(t,meth_name) = (meth_name,typeof(t)) in _inline_list
