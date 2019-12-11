@@ -2,3 +2,5 @@ name = "Lerchen"
 uuid = "d42ef402-04e6-4356-9f73-091573ea58dc"
 authors = ["James.Hester <jxh@ansto.gov.au>"]
 version = "0.5.0"
+[compat]
+julia = "1.2"
