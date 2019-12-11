@@ -48,8 +48,95 @@ string is not.
 names of rules or aliases.  If your Lark grammar does this, you will
 need to change it.
 
-# Examples
+# Example
 
+The following example shows how a simple JSON parser is implemented.
+
+First the grammar is written:
+```
+json_grammar = raw"""
+    ?start: value
+
+    ?value: object
+          | array
+          | string
+          | SIGNED_NUMBER      -> number
+          | "true"             -> t
+          | "false"            -> f
+          | "null"             -> null
+
+    array  : "[" [value ("," value)*] "]"
+    object : "{" [pair ("," pair)*] "}"
+    pair   : string ":" value
+
+    string : ESCAPED_STRING
+
+    %import common.ESCAPED_STRING
+    %import common.SIGNED_NUMBER
+    %import common.WS
+
+    %ignore WS
+"""
+```
+
+Note the ``-> <alias>`` syntax: this gives a name to this particular
+branch of the ``value`` rule. For further details on the grammar
+please see the Lark documentation.
+
+We can transform items as they are parsed, for example, in order to
+immediately turn strings into numbers.  A subtype of ``Transformer``
+can be passed as an additional keyword argument when creating the
+parser in order to do this.  A method whose name matches the rule
+name (or alias) and whose first argument is our subtype of
+``Transformer`` will be called whenever that rule is matched.
+
+These methods are prefixed by the ``@rule`` macro (if all of the
+parse tree children are collected into a single array argument) or
+``@inline_rule`` macro (if the parse tree children have a single
+argument each).
+
+```
+struct TreeToJson <: Transformer end
+
+@inline_rule string(t::TreeToJson, s) = replace(s[2:end-1],"\\\""=>"\"")
+
+@rule  array(t::TreeToJson,a) = Array(a)
+@rule  pair(t::TreeToJson,p) = Tuple(p)
+@rule  object(t::TreeToJson,o) = Dict(o)
+@inline_rule number(t::TreeToJson,n) = Base.parse(Float64,n)
+
+@rule  null(t::TreeToJson,_) = nothing
+@rule  t(t::TreeToJson,_) = true
+@rule  f(t::TreeToJson,_) = false
+```
+
+The above rules define a ``TreeToJson`` subtype, and rules whose
+names match the rule or alias names in the grammar. For example,
+whenever the string rule is matched, the enclosing double quotes
+are dropped and any ``\"`` sequences replaced by a double quote.
+
+Finally, we create our parser by calling the ``Lark`` constructor:
+
+```
+json_parser = Lark(json_grammar, parser="lalr", lexer="standard", transformer=TreeToJson())
+```
+
+Now, we can parse JSON by calling the ``Lerchen.parse`` method with
+``json_parser`` as the first argument and the text to parse as the
+second argument:
+
+```
+j = Lerchen.parse(json_parser,test_json)
+
+```
+
+The above example is available in the Examples directory for
+study.
+
+## Other examples
+
+The `tests` directory contains many more very simple examples
+of correctly-constructed grammars.
 
 
 # Inconsistencies with Lark

@@ -8,8 +8,8 @@ using Lerchen
 using JSON
 
 # Note the change in grammar vs Python: we do not
-# use 'true' and 'false' as the transformation
-# functions to avoid name collisions.
+# use 'true' and 'false' as the names of the
+# true/false aliases to avoid keyword collisions.
 
 json_grammar = raw"""
     ?start: value
@@ -38,7 +38,6 @@ json_grammar = raw"""
 
 struct TreeToJson <: Transformer end
 
-# Do we need this?
 @inline_rule string(t::TreeToJson, s) = replace(s[2:end-1],"\\\""=>"\"")
 
 @rule  array(t::TreeToJson,a) = Array(a)
@@ -49,10 +48,6 @@ struct TreeToJson <: Transformer end
 @rule  null(t::TreeToJson,_) = nothing
 @rule  t(t::TreeToJson,_) = true
 @rule  f(t::TreeToJson,_) = false
-
-# json_parser = Lark(json_grammar, parser='earley', lexer='standard')
-# def parse(x):
-#     return TreeToJson().transform(json_parser.parse(x))
 
 json_parser = Lark(json_grammar, parser="lalr", lexer="standard", transformer=TreeToJson())
 
