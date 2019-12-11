@@ -34,12 +34,12 @@ end
 For Julia we need to make sure the correct parse_fn is dispatched for
 this to make sense.
 """
-#== match_examples(ui::UnexpectedInput,parse_type,examples;parse_fn = parse) = begin
+match_examples(ui::UnexpectedInput,parse_call,examples) = begin
     candidate = nothing
     for (label,example) in examples
         for malformed in example
             try
-                parse_fn(parse_type,malformed)
+                parse_call(malformed)
             catch ut
                 if ut isa UnexpectedInput
                     if ut.state == ui.state
@@ -64,7 +64,7 @@ this to make sense.
     end
     return candidate
 end
-==#
+
 
 struct UnexpectedCharacters <: UnexpectedInput
     seq

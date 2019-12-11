@@ -44,6 +44,14 @@ pre-processed it.
 backslash-x combination to insert a particular byte value in the
 string is not.
 
+4. Avoid using Julia keywords (such as ``true`` or ``false``) as the
+names of rules or aliases.  If your Lark grammar does this, you will
+need to change it.
+
+# Examples
+
+
+
 # Inconsistencies with Lark
 
 1. Earley and CYK grammars are not implemented. 

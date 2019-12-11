@@ -62,6 +62,9 @@ end
 
 TerminalDef(name,pattern; priority=1) = TerminalDef(name,pattern,priority)
 
+# TODO: make this a real subtype of AbstractString. Meanwhile, we simply
+# reimplement those string methods that are used elsewhere
+
 mutable struct Token #<: AbstractString
     type_::String
     pos_in_stream::Union{Int,Nothing}
@@ -79,6 +82,8 @@ Token(type_,value;pos_in_stream=nothing,line=nothing,column=nothing) =
 Base.startswith(t::Token,c) = startswith(t.value,c)
 Base.lstrip(t::Token,c) = lstrip(t.value,c)
 Base.parse(::Type{T},t::Token) where T = Base.parse(T,t.value)
+Base.getindex(t::Token,a...;b...) = Base.getindex(t.value,a...;b...)
+Base.lastindex(t::Token) = Base.lastindex(t.value)
 
 # Lexer.py implements a generic equality, where any comparison other
 # than with another token defaults to string comparison

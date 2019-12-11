@@ -746,7 +746,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
             
         elseif e isa UnexpectedToken
             context = get_context(e,grammar_text)
-            error = match_examples(e,gl, Dict(
+            error = match_examples(e,partial(parse,gl.parser), Dict(
                 "Unclosed parenthesis"=> ["a: (\n"],
                 "Umatched closing parenthesis"=> ["a: )\n", "a: [)\n", "a: (]\n"],
                 "Expecting rule or terminal definition (missing colon)"=> ["a\n", "a->\n", "A->\n", "a A\n"],
