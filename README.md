@@ -3,8 +3,7 @@
 Lerchen (German for Lark) is a partial port of the Lark grammar processor from
 Python to Julia.  Lark grammars should work unchanged in Lerchen.
 
-
-# Quick start
+# Quick start for Lark users
 
 Please read the Lark documentation.  When converting from Lark programs written
 in Python to Lerchen programs written in Julia, the following changes are necessary:
@@ -21,7 +20,7 @@ desired transformation/visitor type.
 6. Any grammars containing backslash-double quote sequences need to be fixed (see below).
 7. Any grammars containing backslash-x to denote a byte value need to be fixed (see below).
 
-# Grammars
+## Grammars
 
 Lark grammars should work unchanged in Lerchen, with the caveats
 below.  Note that this guarantee applies only to the sequence of
@@ -40,8 +39,8 @@ grammar defines the sequence backslash-quote to represent a quote; so
 these two characters must remain in the string after Julia has 
 pre-processed it.
 
-3. While unicode escapes are recognised (backslash-u), the Python
-backslash-x combination to insert a particular byte value in the
+3. While unicode escapes are recognised (``\uxxxx``), the Python
+``\x`` combination to insert a particular byte value in the
 string is not.
 
 4. Avoid using Julia keywords (such as ``true`` or ``false``) as the
@@ -79,11 +78,9 @@ json_grammar = raw"""
 """
 ```
 
-Note the ``-> <alias>`` syntax: this gives a name to this particular
-branch of the ``value`` rule. For further details on the grammar
-please see the Lark documentation.
+For details on the grammar syntax refer to the [Lark documentation](https://github.com/lark-parser/lark/blob/master/docs/grammar.md).
 
-We can transform items as they are parsed, for example, in order to
+Items can be transformed as they are parsed, for example, in order to
 immediately turn strings into numbers.  A subtype of ``Transformer``
 can be passed as an additional keyword argument when creating the
 parser in order to do this.  A method whose name matches the rule
@@ -95,7 +92,7 @@ parse tree children are collected into a single array argument) or
 ``@inline_rule`` macro (if the parse tree children have a single
 argument each).
 
-```
+```julia
 struct TreeToJson <: Transformer end
 
 @inline_rule string(t::TreeToJson, s) = replace(s[2:end-1],"\\\""=>"\"")
@@ -117,7 +114,7 @@ are dropped and any ``\"`` sequences replaced by a double quote.
 
 Finally, we create our parser by calling the ``Lark`` constructor:
 
-```
+```julia
 json_parser = Lark(json_grammar, parser="lalr", lexer="standard", transformer=TreeToJson())
 ```
 
@@ -127,7 +124,6 @@ second argument:
 
 ```
 j = Lerchen.parse(json_parser,test_json)
-
 ```
 
 The above example is available in the Examples directory for
