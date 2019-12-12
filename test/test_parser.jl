@@ -808,7 +808,7 @@ make_parser_test(lexer,parser) = begin
 
 end
 
-const TO_TEST = [#("standard","lalr"),
+const TO_TEST = [("standard","lalr"),
                  ("contextual","lalr")
                  ]
 
