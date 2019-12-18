@@ -65,7 +65,7 @@ TerminalDef(name,pattern; priority=1) = TerminalDef(name,pattern,priority)
 # TODO: make this a real subtype of AbstractString. Meanwhile, we simply
 # reimplement those string methods that are used elsewhere
 
-mutable struct Token #<: AbstractString
+mutable struct Token <: AbstractString
     type_::String
     pos_in_stream::Union{Int,Nothing}
     value::String
@@ -79,11 +79,12 @@ Token(type_,value;pos_in_stream=nothing,line=nothing,column=nothing) =
     Token(type_,pos_in_stream,value,line,column,nothing,nothing)
 
 # Reimplement some string methods for later use...
-Base.startswith(t::Token,c) = startswith(t.value,c)
-Base.lstrip(t::Token,c) = lstrip(t.value,c)
-Base.parse(::Type{T},t::Token) where T = Base.parse(T,t.value)
-Base.getindex(t::Token,a...;b...) = Base.getindex(t.value,a...;b...)
-Base.lastindex(t::Token) = Base.lastindex(t.value)
+Base.ncodeunits(t::Token) = ncodeunits(t.value)
+Base.codeunit(t::Token) = codeunit(t.value)
+Base.codeunit(t::Token,i::Integer) = codeunit(t.value,i)
+Base.isvalid(t::Token,i::Int64) = isvalid(t.value,i)
+Base.iterate(t::Token) = iterate(t.value)
+Base.iterate(t::Token,i::Int64) = iterate(t.value,i)
 
 # Lexer.py implements a generic equality, where any comparison other
 # than with another token defaults to string comparison
@@ -94,11 +95,11 @@ Base.:(==)(t1::Token,t2::Token) = begin
     return t1.value == t2.value
 end
 
-Base.:(==)(t1::Token,t2) = begin
+Base.:(==)(t1::Token,t2::String) = begin
     return isequal(t1.value,t2)
 end
 
-Base.:(==)(t1,t2::Token) = begin
+Base.:(==)(t1::String,t2::Token) = begin
     return isequal(t1,t2.value)
 end
 
@@ -202,9 +203,9 @@ unless_callback(mres) = function (t)
     # Note that mres is a single tuple as we are not splitting
     # REs into 100-pattern chunks unlike Python
     mre, type_from_index = mres
-    m = Base.match(mre,t.value)
+    m = Base.match(mre,t.value,1)
     if m != nothing
-        t.type_ = type_from_index[m.offset]
+        t.type_ = type_from_index[lastmatch(m)]
     end
     return t
 end
@@ -242,8 +243,12 @@ end
 # other things.
 build_mres(terminals;match_whole=false) = begin
     postfix = ""
-    if match_whole postfix = "\$" end
-    prep_string = join(["(?P<$(t.name)>$(to_regexp(t.pattern)*postfix))" for t in terminals],"|")
+    prefix = ""
+    if match_whole
+        postfix = "\$"
+        prefix = "^"
+    end
+    prep_string = join(["(?P<$(t.name)>$(prefix*to_regexp(t.pattern)*postfix))" for t in terminals],"|")
     #println("String for regex: $prep_string")
     mres = Regex(prep_string)
     names_by_idx = Base.PCRE.capture_names(mres.regex)

@@ -48,10 +48,10 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
 #    stream = iter(seq)   ####
     states = p.states
 
-    #println("All known keys:")
-    #for k in keys(p.callbacks)
-    #    println("$k")
-    #end
+#    println("All known keys:")
+#    for k in keys(p.callbacks)
+#        println("$k")
+#    end
     state_stack = [p.start_state]
     value_stack = []
 
@@ -74,7 +74,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
     end
     
     reduce(rule) = begin
-        # println("Reducing according to $rule")
+#        println("Reducing according to $rule")
         size = length(rule.expansion)
         if size>0
             s = value_stack[end-size+1:end]
@@ -94,7 +94,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
 
     # Main LALR-parser loop
     for token in seq
-
+#        println("Seen token $token, type $(token.type_)")
         while true
             action, arg = get_action(token)
             @assert arg != p.end_state

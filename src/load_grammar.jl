@@ -728,7 +728,6 @@ GrammarLoader() = begin
     ==#
     callback = create_callback(ParseTreeBuilder(rules))
     lexer_conf = LexerConf(terminals, ignore=["WS", "COMMENT"])
-
     parser_conf = ParserConf(rules, callback, "start")
     GrammarLoader(LALR_TraditionalLexer(lexer_conf, parser_conf))
 end
@@ -926,4 +925,3 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>") = begin
 
 end
 
-load_grammar(text::String;options...) = load_grammar(GrammarLoader(),text;options...)

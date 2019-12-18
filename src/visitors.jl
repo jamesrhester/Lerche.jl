@@ -58,6 +58,7 @@ _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
     else
         return __default__(t,tr.data,children,tr._meta)
     end
+    #println("Processing $(tr.data)")
     return get_method(t,f)(t,children)
 end
 

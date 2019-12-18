@@ -31,9 +31,13 @@ include("parsers/grammar_analysis.jl")
 include("parsers/lalr_analysis.jl")
 include("parsers/lalr_parser.jl")
 include("parser_frontends.jl")
-
 include("load_grammar.jl")
-
 include("lark.jl")
+
+# Prepare the Lark EBNF parser
+
+_lark_grammar = GrammarLoader()
+
+load_grammar(text::String;options...) = load_grammar(_lark_grammar,text;options...)
 
 end # module

@@ -89,6 +89,17 @@ escape_re_string(s::String) = begin
     replace(s, Set(special_chars) => x -> "\\" * x)
 end
 
+## Find the largest index of matching captures
+
+lastmatch(m::RegexMatch) = begin
+    found_match = 0
+    for i in 1:length(m.captures)
+        if m.captures[i] != nothing
+            found_match = i
+        end
+    end
+    return found_match
+end
 
 ## Partial function
 

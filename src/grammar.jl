@@ -54,3 +54,11 @@ Rule(origin,expansion;alias=nothing,options=nothing) = Rule(origin,expansion,ali
 
 Base.show(io::IO,r::Rule) = print(io,"<$(r.origin.name):  $(join(r.expansion," "))>")
 
+# Equality, needed for indexing into rules
+
+Base.:(==)(r1::Rule,r2::Rule) = begin
+    return r1.origin == r2.origin && r1.expansion == r2.expansion &&
+        r1.alias == r2.alias && r1.options == r2.options
+end
+
+Base.hash(r1::Rule) = hash(r1.origin) + hash(r1.expansion) + hash(r1.alias) + hash(r1.options)
