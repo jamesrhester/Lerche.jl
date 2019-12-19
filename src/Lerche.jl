@@ -36,7 +36,7 @@ include("lark.jl")
 
 # Prepare the Lark EBNF parser
 
-_lark_grammar = GrammarLoader()
+const _lark_grammar = GrammarLoader()
 
 load_grammar(text::String;options...) = load_grammar(_lark_grammar,text;options...)
 

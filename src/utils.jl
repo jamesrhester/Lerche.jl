@@ -1,6 +1,12 @@
-export have_method, invoke_callback, _rule_dict, @rule
+export have_method,invoke_callback, @rule, @inline_rule, @rule_holder, @contains_rules
 
-const _rule_dict = Dict{Tuple,Function}()
+# These definitions just for internal module use
+const _rule_dict = IdDict{Tuple,Function}()
+get_rule_dict() = _rule_dict
+
+#const _rule_dict = IdDict{Tuple,Function}()
+
+#@noinline get_rule_dict() = _rule_dict
 
 ## Is this a Julia builtin?
 classify_bool(seq, pred) = begin
@@ -135,29 +141,83 @@ macro rule(s)
     end    
     rule_name = String(s.args[1].args[1])
     rule_type = s.args[1].args[2].args[2] # the type name
-    #println("Rule name: $rule_name, Rule type $rule_type")
+    println("Rule name: $rule_name, Rule type $rule_type")
     quote
-        _rule_dict[($rule_name,$(esc(rule_type)))] = $(esc(s))
+        get_rule_dict()[($rule_name,$(esc(rule_type)))] = $(esc(s))
     end
+    
 end
-
+   
 """
 Flag that the following is an inline rule, that is, that
 its arguments should be splatted when called.
 
 TODO: splice in the results of rule(s) instead of rewriting it.
 """
+
 macro inline_rule(s)
     if s.head != :(=) || s.args[1].head != :call
         error("A rule must be a function definition")
     end    
     rule_name = String(s.args[1].args[1])
     rule_type = s.args[1].args[2].args[2] # the type name
-    #println("Inline rule name: $rule_name, Rule type $rule_type")
+    println("Inline rule name: $rule_name, Rule type $rule_type")
     quote
-        _rule_dict[($rule_name,$(esc(rule_type)))] = (x,y) -> $(esc(s))(x,y...)
+        println("Setting rule "*$rule_name*", length $(length(get_rule_dict()))")
+        get_rule_dict()[($rule_name,$(esc(rule_type)))] = (x,y) -> $(esc(s))(x,y...)
     end
 end
 
-have_method(t,meth_name) = haskey(_rule_dict,(meth_name,typeof(t)))
-get_method(t,meth_name) = _rule_dict[(meth_name,typeof(t))]
+# Adds a dictionary for storing rules
+macro rule_holder()
+    quote
+        const _rule_dict = IdDict{Tuple,Function}()
+        get_rule_dict() = _rule_dict
+    end
+end
+
+macro contains_rules(s)
+    if s.head != :struct
+        error("Macro contains_rules must be called on type declaration")
+    end
+    members = s.args[3].args
+    push!(members,:(_rule_dict::IdDict{Tuple,Function}))
+    # build a new full constructor
+    if s.args[2] isa Symbol
+        typename = s.args[2]
+    else   #There is a type constructor, assume no parameters...
+        typename = s.args[2].args[1]
+    end
+    
+    all_members = length(filter(x-> typeof(x) != LineNumberNode,members))
+    dummy_args = []
+    for i in 1:(all_members-1) push!(dummy_args,gensym()) end
+    constructor = :($(esc(typename))($(dummy_args...))=$(esc(typename))($(dummy_args...),_rule_dict))
+    quote
+        $s
+        $constructor
+    end
+end
+
+#have_method(t,meth_name) = haskey(get_rule_dict(),(meth_name,typeof(t)))
+#get_method(t,meth_name) = get_rule_dict()[(meth_name,typeof(t))]
+
+have_method(t,meth_name) = !isnothing(t) && haskey(t._rule_dict,(meth_name,typeof(t)))
+get_method(t,meth_name) = t._rule_dict[(meth_name,typeof(t))]
+#==
+have_method(t,meth_name) = begin
+    f = nothing
+    try
+        f=eval(Symbol(meth_name))
+    catch e
+        if e isa UndefVarError
+            return false
+        else
+            rethrow(e)
+        end
+    end
+    return length(methods(f,Tuple{typeof(t),Any})) != 0
+end
+
+get_method(t,meth_name) = eval(Symbol(meth_name))
+==#

@@ -58,7 +58,7 @@ _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
     else
         return __default__(t,tr.data,children,tr._meta)
     end
-    #println("Processing $(tr.data)")
+    println("Processing $(tr.data)")
     return get_method(t,f)(t,children)
 end
 
@@ -90,7 +90,7 @@ transform(tr::Transformer,tree) = _transform_tree(tr,tree)
 Base.:*(t1::Transformer,t2::Transformer) = TransformerChain([t1,t2])
 
 __default__(tr::Transformer,data,children,meta) = begin
-    #println("Warning: calling default transformer for $data")
+    #println("Warning: calling default transformer for $data and $tr")
     Tree(data,children,meta)
 end
 
@@ -146,6 +146,7 @@ abstract type Visitor <: VisitorBase end
 abstract type Visitor_Recursive <: VisitorBase end
 
 _call_userfunc(v::VisitorBase,tree) = begin
+    
     if have_method(v,tree.data)
         get_method(v,tree.data)(v,tree)
     else

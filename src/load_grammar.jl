@@ -131,7 +131,8 @@ const RULES = Dict(
     "literal"=> ["REGEXP", "STRING"],
 )
 
-mutable struct EBNF_to_BNF <: Transformer_InPlace
+
+@contains_rules mutable struct EBNF_to_BNF <: Transformer_InPlace
     new_rules::Array{Tuple{String,Tree,Any}}
     rules_by_expr::Dict{Union{String,LarkSymbol,Tree},NonTerminal}
     prefix::String
@@ -175,7 +176,7 @@ end
     end
 end
 
-struct SimplifyRule_Visitor <: Visitor end
+@contains_rules struct SimplifyRule_Visitor <: Visitor end
 
 # So what this does is to find children with the same data type as the parent,
 # and bring them to the same level of the tree
@@ -230,7 +231,7 @@ end
     unique!(tree.children)
 end
 
-struct RuleTreeToText <: Transformer end
+@contains_rules struct RuleTreeToText <: Transformer end
 
 @rule expansions(rtt::RuleTreeToText,x) = begin
     return x
@@ -244,7 +245,7 @@ end
     return expansion, alias.value
 end
 
-struct CanonizeTree <: Transformer_InPlace end
+@contains_rules struct CanonizeTree <: Transformer_InPlace end
 
 @inline_rule maybe(ct::CanonizeTree,expr) = Tree("expr",[expr, Token("OP","?",pos_in_stream=-1)])
 
@@ -256,7 +257,7 @@ struct CanonizeTree <: Transformer_InPlace end
     return push!(tokenmods,value)
 end
 
-mutable struct PrepareAnonTerminals <: Transformer_InPlace
+@contains_rules mutable struct PrepareAnonTerminals <: Transformer_InPlace
     terminals
     term_set::Set
     term_reverse::Dict{Pattern,TerminalDef}
@@ -400,7 +401,7 @@ _literal_to_pattern(literal) = begin
                 "REGEXP" => PatternRE)[literal.type_](s,flags)
 end
 
-struct PrepareLiterals <: Transformer_InPlace end
+@contains_rules struct PrepareLiterals <: Transformer_InPlace end
 
 @inline_rule literal(pl::PrepareLiterals, literal) = Tree("pattern",[_literal_to_pattern(literal)])
 
@@ -413,7 +414,7 @@ struct PrepareLiterals <: Transformer_InPlace end
     return Tree("pattern",[PatternRE(regexp)])
 end
 
-struct TerminalTreeToPattern <: Transformer end
+@contains_rules struct TerminalTreeToPattern <: Transformer end
 
 @rule pattern(tttp::TerminalTreeToPattern, ps) = begin
     p = ps[1]
@@ -465,7 +466,7 @@ end
 
 @rule value(tttp::TerminalTreeToPattern,v) = v[1]
 
-struct PrepareSymbols <: Transformer_InPlace end
+@contains_rules struct PrepareSymbols <: Transformer_InPlace end
 
 @rule value(ps::PrepareSymbols,v) = begin
     v = v[1]
@@ -702,7 +703,7 @@ isupper(s) = begin
     return all(y -> !isletter(y) || isuppercase(y),s)
 end
 
-struct PrepareGrammar <:Transformer_InPlace end
+@contains_rules struct PrepareGrammar <:Transformer_InPlace end
 
 @inline_rule terminal(pg::PrepareGrammar, name) = begin
     name
