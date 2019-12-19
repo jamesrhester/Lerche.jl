@@ -142,10 +142,9 @@ macro rule(s)
     rule_name = String(s.args[1].args[1])
     rule_type = s.args[1].args[2].args[2] # the type name
     println("Rule name: $rule_name, Rule type $rule_type")
-    quote
-        get_rule_dict()[($rule_name,$(esc(rule_type)))] = $(esc(s))
-    end
-    
+    esc(quote
+        get_rule_dict()[($rule_name,$rule_type)] = $s
+    end )
 end
    
 """
@@ -162,18 +161,16 @@ macro inline_rule(s)
     rule_name = String(s.args[1].args[1])
     rule_type = s.args[1].args[2].args[2] # the type name
     println("Inline rule name: $rule_name, Rule type $rule_type")
-    quote
+    esc(quote
         println("Setting rule "*$rule_name*", length $(length(get_rule_dict()))")
-        get_rule_dict()[($rule_name,$(esc(rule_type)))] = (x,y) -> $(esc(s))(x,y...)
-    end
+        get_rule_dict()[($rule_name,$rule_type)] = (x,y) -> $s(x,y...)
+    end)
 end
 
 # Adds a dictionary for storing rules
 macro rule_holder()
-    quote
-        const _rule_dict = IdDict{Tuple,Function}()
-        get_rule_dict() = _rule_dict
-    end
+    s1 = esc(:(const _rule_dict = IdDict{Tuple,Function}();get_rule_dict()=_rule_dict))
+    return s1
 end
 
 macro contains_rules(s)
@@ -181,7 +178,7 @@ macro contains_rules(s)
         error("Macro contains_rules must be called on type declaration")
     end
     members = s.args[3].args
-    push!(members,:(_rule_dict::IdDict{Tuple,Function}))
+    push!(members,esc(:(_rule_dict::IdDict{Tuple,Function})))
     # build a new full constructor
     if s.args[2] isa Symbol
         typename = s.args[2]
@@ -191,8 +188,9 @@ macro contains_rules(s)
     
     all_members = length(filter(x-> typeof(x) != LineNumberNode,members))
     dummy_args = []
+    rule_holder = :_rule_dict
     for i in 1:(all_members-1) push!(dummy_args,gensym()) end
-    constructor = :($(esc(typename))($(dummy_args...))=$(esc(typename))($(dummy_args...),_rule_dict))
+    constructor = :($(esc(typename))($(dummy_args...))=$(esc(typename))($(dummy_args...),$(esc(rule_holder))))
     quote
         $s
         $constructor
