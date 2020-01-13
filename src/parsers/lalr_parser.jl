@@ -94,7 +94,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
 
     # Main LALR-parser loop
     for token in seq
-#        println("Seen token $token, type $(token.type_)")
+        println("Seen token $token, type $(token.type_)")
         while true
             action, arg = get_action(token)
             @assert arg != p.end_state

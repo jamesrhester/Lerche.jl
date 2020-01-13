@@ -76,14 +76,25 @@ end
 # have access to the minimum width through PCRE, so we use that.
 # Note that this relies on implementation details of the pcre2
 # access in Julia base (not part of the published API) so may
-# fail in future.  We provide a dummy maximum length.
+# fail in future.  We do a naive guess for the maximum length.
 get_regexp_width(regexp) = begin
+    minlength = 0
     try
         r = Regex(regexp)
-        return Base.PCRE.info(r.regex,Base.PCRE.INFO_MINLENGTH,Int32),missing
+        minlength = Base.PCRE.info(r.regex,Base.PCRE.INFO_MINLENGTH,Int32)
     catch
         error("Cannot parse $regexp")
     end
+    # A naive guess. Character ranges are not caught, neither are repeats
+    if (occursin("+",regexp) && !occursin("\\+",regexp))|| (
+        occursin("*",regexp) && !occursin("\\*",regexp))
+        maxlength = 1000
+        #println("$regexp has a big maxlength")
+    else
+        maxlength = minlength
+    end
+    return (minlength,maxlength)
+
 end
 
 ## ============Only in the Julia version ===========

@@ -172,6 +172,7 @@ lex(l::Lexer,stream::String,newline_types,ignore_types) = Channel() do token_cha
         value = m.match
         match_num = min([i for (i,v) in enumerate(m.captures) if !isnothing(v)]...)
         type_ = names_by_idx[match_num]
+        #println("Preliminary match: $type_")
         if !(type_ in ignore_types)
             t = Token(type_,value,pos_in_stream=line_ctr.char_pos,line=line_ctr.line,column=line_ctr.column)
             if t.type_ in collect(keys(sub_lexer.callback))
