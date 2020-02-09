@@ -219,7 +219,7 @@ end
     if rule.data == "expansions"
         aliases = []
         for child in tree.children[1].children
-            append!(aliases,Tree("alias",[child,alias_name]))
+            push!(aliases,Tree("alias",[child,alias_name]))
         end
         tree.data = "expansions"
         tree.children = aliases
