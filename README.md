@@ -3,22 +3,53 @@
 Lerche (German for Lark) is a partial port of the Lark grammar processor from
 Python to Julia.  Lark grammars should work unchanged in Lerche.
 
-# Quick start for Lark users
+# Quick start
 
-Please read the Lark documentation.  When converting from Lark programs written
-in Python to Lerche programs written in Julia, the following changes are necessary:
+See also 'Notes for Lark users' below.
 
-1. All classes become types
-2. All class method calls become Julia method calls with the type as the first argument
+Lerche reads Lark EBNF grammars to produce a parser. This parser, when
+provided with text conforming to the grammar, produces a parse
+tree. This tree can be visited and transformed using "rules", which
+are just Julia methods. The first argument of a rule is an object
+which is a subtype of ``Visitor`` or ``Transformer``. The name of a
+rule is the production that it should be called on.
+
+1. Define one or more subtypes of ``Transformer`` or ``Visitor`` to be
+used to dispatch the appropriate rule. The subtype can also be used to
+hold information if you wish, and must be a concrete type at present.
+1. Prefix the subtype definition with ``@contains_rules``
+1. For every production in your grammar that you wish to transform,
+write a rule with identical name to the production
+1. The rule should be prefixed with ``@rule`` if the second argument
+is an array containing all of the arguments to the grammar production
+1. The rule should be prefixed with ``@inline_rule`` if the second
+and following arguments refer to each argument in the grammar production
+1. Near the top of the module containing your subtypes and rules, put
+``@rule_holder`` on a line by itself (may be unnecessary in the future).
+
+For a real-world example of usage, see [this file](https://github.com/jamesrhester/CIF_dREL.jl/blob/master/src/jl_transformer.jl).
+
+# Notes for Lark users
+
+Please read the Lark documentation.  When converting from Lark
+programs written in Python to Lerche programs written in Julia, the
+changes outlined below are necessary. Note that before version 1.0 use
+of the ``@contains_rules`` and ``@rule_holder`` macros is likely to
+be simplified.
+
+1. All Transformer and Visitor classes become types
+1. All class method calls become Julia method calls with the type as the first argument
 (i.e. replacing ``self``)
-3. Transformers and visitors should be declared as subtypes of the appropriate
-visitor/transformer type
-4. Transformation or visitor rules should be preceded by the ``@rule`` macro. Inline
+1. Transformers and visitors should be declared in a single module with the
+macro ``@rule_holder`` on a line by itself before any type definitions
+1. Transformers and visitors should be declared as subtypes of the appropriate
+visitor/transformer type, preceded by the macro ``@contains_rules``
+1. Transformation or visitor rules should be preceded by the ``@rule`` macro. Inline
 rules use the ``@inline_rule`` macro. 
-5. The first argument of transformation and visitor rules is a variable of the
+1. The first argument of transformation and visitor rules is a variable of the
 desired transformation/visitor type.
-6. Any grammars containing backslash-double quote sequences need to be fixed (see below).
-7. Any grammars containing backslash-x to denote a byte value need to be fixed (see below).
+1. Any grammars containing backslash-double quote sequences need to be fixed (see below).
+1. Any grammars containing backslash-x to denote a byte value need to be fixed (see below).
 
 ## Grammars
 
@@ -93,7 +124,9 @@ parse tree children are collected into a single array argument) or
 argument each).
 
 ```julia
-struct TreeToJson <: Transformer end
+@rule_holder #needed once in the module
+
+@contains_rules struct TreeToJson <: Transformer end
 
 @inline_rule string(t::TreeToJson, s) = replace(s[2:end-1],"\\\""=>"\"")
 

@@ -1,3 +1,5 @@
+@rule_holder
+
 setup_tree() = Tree("a",[Tree(x,y) for (x,y) in zip("bcd","xyz")])
 
 @testset "Interpreter testing" begin
