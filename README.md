@@ -185,3 +185,10 @@ improvement as no effort has been made to use Julia efficiency tricks.
 The priority has been on maintaining fidelity with Lark.
 
 Python "yield" has been implemented using Julia Channels.
+
+The ``@rule_holder`` and ``@contains_rules`` macros have been implemented in
+order to store rule information in a dictionary local to the calling module. 
+So far it has not been possible to store information within Lerche data structures from outside the
+``Lerche`` module, and perhaps this is a good thing. Ideally Julia's multiple
+dispatch mechanism would be used to select the appropriate rule, but no way
+to reliably go from rule name as a string to dispatch on method name has been found.
