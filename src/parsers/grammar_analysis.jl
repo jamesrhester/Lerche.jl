@@ -81,7 +81,7 @@ calculate_sets(rules) = begin
     FIRST = Dict()
     FOLLOW = Dict()
     for sym in symbols
-        FIRST[sym] = if sym.is_term Set([sym]) else Set() end
+        FIRST[sym] = if is_terminal(sym) Set([sym]) else Set() end
         FOLLOW[sym] = Set()
     end
 
@@ -151,7 +151,7 @@ init_analyser!(g::GrammarAnalyzer,parser_conf;debug=false) = begin
     @assert length(rules) == length(Set(rules))
     for r in rules
         for sym in r.expansion
-            if !(sym.is_term || sym in collect(keys(g.rules_by_origin)))
+            if !(is_terminal(sym) || sym in collect(keys(g.rules_by_origin)))
                 throw(GrammarError("Using an undefined rule: $sym"))
             end
         end
@@ -174,7 +174,7 @@ expand_rule(g::GrammarAnalyzer,rule) = begin
                 if !isempty(r.expansion)
                     # Next symbol from this
                     new_r = next(init_ptr)
-                    if !new_r.is_term
+                    if !is_terminal(new_r)
                         # Non-terminal, send it back
                         put!(rule_chan,new_r)
                     end
@@ -189,9 +189,9 @@ expand_rule(g::GrammarAnalyzer,rule) = begin
 end
 
 _first(g::GrammarAnalyzer,r) = begin
-    if r.is_term
+    if is_terminal(r)
         return Set(r)
     else
-        return Set([next(rp) for rp in g.expand_rule(r) if next(rp).is_term])
+        return Set([next(rp) for rp in g.expand_rule(r) if is_terminal(next(rp))])
     end
 end

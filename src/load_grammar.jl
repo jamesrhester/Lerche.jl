@@ -4,7 +4,7 @@ const IMPORT_PATHS = [joinpath(@__DIR__,"grammars")]
 
 const _RE_FLAGS = "imslux"
 
-is_terminal(sym) = isupper(sym)
+# is_terminal(sym) = isupper(sym)
 
 const _TERMINAL_NAMES = Dict(
     "." => "DOT",

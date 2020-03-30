@@ -94,7 +94,7 @@ compute_lookahead!(l::LALR_Analyzer) = begin
             rps = Set(advance(rp,sym) for rp in rps)
             #println("One step forward...$rps")
             for rp in rps
-                if !is_satisfied(rp) && !(next(rp).is_term)
+                if !is_satisfied(rp) && !(is_terminal(next(rp)))
                     union!(rps,expand_rule(l,next(rp)))
                     #println("Added more rules: Rule pointers now $rps")
                 end

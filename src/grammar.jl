@@ -1,13 +1,15 @@
-# This is a literal-ish translation. However
-# we may be more idiomatic by e.g. having
-# Symbol(true,false)
+# Replace terminal/non-terminal with
+# Traits.  Not sure if this is a win.
 
 abstract type LarkSymbol end
 
-LarkSymbol(name) = LarkSymbol(name,missing)
+abstract type TerminalTrait end
+struct IsTerminal <: TerminalTrait end
+struct IsNotTerminal <: TerminalTrait end
 
+# == Symbols == #
 Base.:(==)(s1::LarkSymbol,s2::LarkSymbol) = begin
-    typeof(s1) == typeof(s2) && s1.is_term == s2.is_term && s1.name == s2.name
+    typeof(s1) == typeof(s2) && s1.name == s2.name
 end
 
 Base.hash(s1::LarkSymbol) = begin
@@ -16,24 +18,31 @@ end
 
 Base.show(io::IO,ls::LarkSymbol) = print(io,"$(typeof(ls))($(ls.name))")
 
+# == Terminals == #
 struct Terminal <: LarkSymbol
     name::String
-    is_term::Bool
     filter_out::Bool
 end
 
-Terminal(name;filter_out=false) = Terminal(name,true,filter_out)
-
+Terminal(name;filter_out=false) = Terminal(name,filter_out)
+TerminalTrait(::Type{Terminal}) = IsTerminal()
 Base.show(io::IO,ls::Terminal) = print(io,"Terminal($(ls.name))")
 
+# == Non terminals == #
 struct NonTerminal <: LarkSymbol
     name::String
-    is_term::Bool
+    #is_term::Bool
 end
+
+TerminalTrait(::Type{NonTerminal}) = IsNotTerminal()
 
 Base.show(io::IO,ls::NonTerminal) = print(io,"NonTerminal($(ls.name))")
 
-NonTerminal(name) = NonTerminal(name,false)
+is_terminal(l::T) where {T} = is_terminal(TerminalTrait(T),l)
+is_terminal(::IsTerminal,l) = true
+is_terminal(::IsNotTerminal,l) = false
+
+# == Rule options == #
 
 struct RuleOptions
     keep_all_tokens::Bool

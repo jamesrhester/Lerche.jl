@@ -1,4 +1,4 @@
-is_discarded_terminal(t) = t.is_term && t.filter_out != nothing
+is_discarded_terminal(t) = is_terminal(t) && t.filter_out != nothing
 
 struct WriteTokensTransformer <: Transformer_InPlace
     tokens

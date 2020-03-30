@@ -82,11 +82,11 @@ ChildFilterLALR(to_include,node_builder) = function(c)
     return node_builder(filtered)
 end
     
-_should_expand(sym) = !sym.is_term && first(sym.name) == '_'
+_should_expand(sym) = !is_terminal(sym) && first(sym.name) == '_'
 
 maybe_create_child_filter(expansion,keep_all_tokens) = begin
     to_include = [(i,_should_expand(sym)) for (i,sym) in enumerate(expansion)
-                  if keep_all_tokens || !(sym.is_term && sym.filter_out)]
+                  if keep_all_tokens || !(is_terminal(sym) && sym.filter_out)]
     if length(to_include) < length(expansion) || any([to_expand for (i,to_expand) in to_include])
         return partial(ChildFilterLALR,to_include)
     else
@@ -109,7 +109,7 @@ end
 
 maybe_create_ambiguous_expander(expansion,keep_all_tokens) = begin
     to_expand = [i for (i,sym) in enumerate(expansion)
-                 if keep_all_tokens || ((!(sym.is_term && sym.filter_out)) && _should_expand(sym))]
+                 if keep_all_tokens || ((!(is_terminal(sym) && sym.filter_out)) && _should_expand(sym))]
     if length(to_expand)>0
         return partial(AmbiguousExpander, to_expand)
     else
