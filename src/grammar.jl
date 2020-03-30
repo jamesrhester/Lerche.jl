@@ -11,7 +11,7 @@ Base.:(==)(s1::LarkSymbol,s2::LarkSymbol) = begin
 end
 
 Base.hash(s1::LarkSymbol) = begin
-    hash(s1.is_term) + hash(s1.name)
+    hash(s1.name)
 end
 
 Base.show(io::IO,ls::LarkSymbol) = print(io,"$(typeof(ls))($(ls.name))")
@@ -57,8 +57,8 @@ Base.show(io::IO,r::Rule) = print(io,"<$(r.origin.name):  $(join(r.expansion," "
 # Equality, needed for indexing into rules
 
 Base.:(==)(r1::Rule,r2::Rule) = begin
-    return r1.origin == r2.origin && r1.expansion == r2.expansion &&
-        r1.alias == r2.alias && r1.options == r2.options
+    return r1.origin == r2.origin && r1.expansion == r2.expansion
 end
 
-Base.hash(r1::Rule) = hash(r1.origin) + hash(r1.expansion) + hash(r1.alias) + hash(r1.options)
+# The rule name should be unique enough
+Base.hash(r1::Rule) = hash(r1.origin)
