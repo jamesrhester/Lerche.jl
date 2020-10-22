@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        julia-version: ['1.2', '1', 'nightly']
-        julia-arch: [x64, x86]
+        julia-version: ['1.2']
+        julia-arch: [x64]
         os: [ubuntu-latest]
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
