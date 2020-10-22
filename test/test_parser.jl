@@ -20,6 +20,7 @@ end
 
 # This doesn't seem to work in Lark 0.7 either.
 
+#==
 @testset "Propagate positions" begin
     g = Lark("""start: a
                     a: "a"
@@ -29,6 +30,7 @@ end
     @test_skip Lerche.meta(r.children[1]).line == 1
 
 end
+==#
 
 @testset "Infinite recursion" begin
 

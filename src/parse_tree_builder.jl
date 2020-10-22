@@ -126,10 +126,10 @@ ptb_inline_args(func) = begin
     end
 
 struct ParseTreeBuilder
-    propagate_positions
-    always_keep_all_tokens
-    ambiguous
-    rule_builders
+    propagate_positions::Bool
+    always_keep_all_tokens::Bool
+    ambiguous::Bool
+    rule_builders::Array{Tuple{Rule,Array{Function}},1}
 end
 
 ParseTreeBuilder(rules;propagate_positions=false,keep_all_tokens=false,ambiguous=false)= begin

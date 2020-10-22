@@ -12,8 +12,8 @@ Base.:(==)(s1::LarkSymbol,s2::LarkSymbol) = begin
     typeof(s1) == typeof(s2) && s1.name == s2.name
 end
 
-Base.hash(s1::LarkSymbol) = begin
-    hash(s1.name)
+Base.hash(s1::LarkSymbol,h::UInt64) = begin
+    hash(s1.name,h)
 end
 
 Base.show(io::IO,ls::LarkSymbol) = print(io,"$(typeof(ls))($(ls.name))")
@@ -70,4 +70,4 @@ Base.:(==)(r1::Rule,r2::Rule) = begin
 end
 
 # The rule name should be unique enough
-Base.hash(r1::Rule) = hash(r1.origin)
+Base.hash(r1::Rule,h::UInt64) = hash(r1.origin,h)

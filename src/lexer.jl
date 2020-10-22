@@ -22,7 +22,6 @@ Base.hash(p1::Pattern) = begin
     return hash((typeof(p1),p1.value,p1.flags))
 end
 
-# TODO: how to look after flags in Julia?
 _get_flags(p1::Pattern,value) = begin
     for f in get_flags(p1)
         value = ("(?$f)"*value)

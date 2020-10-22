@@ -47,7 +47,7 @@ end
 is_satisfied(r::RulePtr) = r.index == length(r.rule.expansion)
 
 Base.isequal(r1::RulePtr,r2::RulePtr) = r1.rule == r2.rule && r1.index == r2.index
-Base.hash(r1::RulePtr) = hash(r1.rule)+hash(r1.index)
+Base.hash(r1::RulePtr,h::UInt64) = hash(r1.rule,hash(r1.index,h))
 
 update_set(set1,set2) = begin
     if isempty(set2)
@@ -77,9 +77,9 @@ calculate_sets(rules) = begin
     #     if i+1=j or {Y(i+1),...,Y(j-1)} subset of NULLABLE then
     #       FOLLOW(Y(i)) = FOLLOW(Y(i)) union FIRST(Y(j))
     # until none of NULLABLE,FIRST,FOLLOW changed in last iteration
-    NULLABLE = Set()
-    FIRST = Dict()
-    FOLLOW = Dict()
+    NULLABLE = Set{LarkSymbol}()
+    FIRST = Dict{LarkSymbol,Set{LarkSymbol}}()
+    FOLLOW = Dict{LarkSymbol,Set{LarkSymbol}}()
     for sym in symbols
         FIRST[sym] = if is_terminal(sym) Set([sym]) else Set() end
         FOLLOW[sym] = Set()
@@ -163,7 +163,7 @@ end
 
 """Returns all init_ptrs accessible by rule (recursive)"""
 expand_rule(g::GrammarAnalyzer,rule) = begin
-    init_ptrs = Set()
+    init_ptrs = Set{RulePtr}()
     _expand_rule(_rule) = begin
         Channel() do rule_chan
             #@assert !_rule.is_term _rule
@@ -185,7 +185,7 @@ expand_rule(g::GrammarAnalyzer,rule) = begin
 
     _ = collect(bfs([rule], _expand_rule))
 
-    return Set(init_ptrs)
+    return init_ptrs
 end
 
 _first(g::GrammarAnalyzer,r) = begin

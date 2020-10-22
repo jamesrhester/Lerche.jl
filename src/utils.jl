@@ -8,7 +8,6 @@ get_rule_dict() = _rule_dict
 
 #@noinline get_rule_dict() = _rule_dict
 
-## Is this a Julia builtin?
 classify_bool(seq, pred) = begin
     true_elems = []
     false_elems = []
@@ -34,7 +33,7 @@ using the value() function. If neither key nor
 value are provided, items become their own
 values.
 
-This is used to classify patterns into types,
+This is e.g. used to classify patterns into types,
 either literal strings or regular expressions.
 
 """
@@ -43,7 +42,7 @@ classify(seq;key=nothing,value=nothing) = begin
     for item in seq
         if !(key==nothing) k = key(item) else k = item end
         if !(value==nothing) v = value(item) else v = item end
-        if k in collect(keys(d))
+        if haskey(d,k)
             push!(d[k],v)
         else
             d[k] = [v]
