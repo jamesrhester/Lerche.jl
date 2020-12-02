@@ -1,3 +1,5 @@
+![Testing](https://github.com/jamesrhester/Lerche.jl/workflows/Tests/badge.svg)
+[![Coverage Status](https://coveralls.io/repos/github/jamesrhester/Lerche.jl/badge.svg?branch=master)](https://coveralls.io/github/jamesrhester/Lerche.jl?branch=master)
 # Introduction
 
 Lerche (German for Lark) is a partial port of the Lark grammar processor from
