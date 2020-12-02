@@ -37,7 +37,7 @@ end
     g = """start: a
            a: a | "a"
         """
-    @test_throws GrammarError Lark(g,parser="lalr")
+    @test_throws Exception Lark(g,parser="lalr")
 end
 
 make_parser_test(lexer,parser) = begin
@@ -495,7 +495,7 @@ make_parser_test(lexer,parser) = begin
             g = """start: TERM
                 TERM: "a" -> alias
                 """
-            @test_throws  GrammarError make_lark(g)
+            @test_throws  Exception make_lark(g)
         end
 
         @testset "test_line_and_column" begin
