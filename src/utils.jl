@@ -1,12 +1,4 @@
-export have_method,invoke_callback, @rule, @inline_rule, @rule_holder, @contains_rules
-
-# These definitions just for internal module use
-const _rule_dict = IdDict{Tuple,Function}()
-get_rule_dict() = _rule_dict
-
-#const _rule_dict = IdDict{Tuple,Function}()
-
-#@noinline get_rule_dict() = _rule_dict
+export have_method,invoke_callback, @rule, @inline_rule
 
 classify_bool(seq, pred) = begin
     true_elems = []
@@ -149,11 +141,14 @@ macro rule(s)
     if s.head != :(=) || s.args[1].head != :call
         error("A rule must be a function definition")
     end    
-    rule_name = String(s.args[1].args[1])
+    rule_name = QuoteNode(s.args[1].args[1])
+    if s.args[1].args[2].head != :(::)
+        error("Type must be included in the first argument to define a rule: $s")
+    end
     rule_type = s.args[1].args[2].args[2] # the type name
     println("Rule name: $rule_name, Rule type $rule_type")
     esc(quote
-        get_rule_dict()[($rule_name,$rule_type)] = $s
+        Lerche.transformer_func($(s.args[1].args[2]),::Val{$rule_name},meta,$(s.args[1].args[3])) = $(s.args[2])
     end )
 end
    
@@ -168,43 +163,14 @@ macro inline_rule(s)
     if s.head != :(=) || s.args[1].head != :call
         error("A rule must be a function definition")
     end    
-    rule_name = String(s.args[1].args[1])
+    rule_name = QuoteNode(s.args[1].args[1])
     rule_type = s.args[1].args[2].args[2] # the type name
     println("Inline rule name: $rule_name, Rule type $rule_type")
+    println("Args $(s.args[1].args)")
     esc(quote
-        println("Setting rule "*$rule_name*", length $(length(get_rule_dict()))")
-        get_rule_dict()[($rule_name,$rule_type)] = (x,y) -> $s(x,y...)
+        Lerche.transformer_func(x::$rule_type,y::Val{$rule_name},meta,z::Array) = Lerche.transformer_func(x,y,z...) 
+        Lerche.transformer_func($(s.args[1].args[2]),::Val{$rule_name},$(s.args[1].args[3:end]...)) = $(s.args[2])
     end)
-end
-
-# Adds a dictionary for storing rules
-macro rule_holder()
-    s1 = esc(:(const _rule_dict = IdDict{Tuple,Function}();get_rule_dict()=_rule_dict))
-    return s1
-end
-
-macro contains_rules(s)
-    if s.head != :struct
-        error("Macro contains_rules must be called on type declaration")
-    end
-    members = s.args[3].args
-    push!(members,esc(:(_rule_dict::IdDict{Tuple,Function})))
-    # build a new full constructor
-    if s.args[2] isa Symbol
-        typename = s.args[2]
-    else   #There is a type constructor, assume no parameters...
-        typename = s.args[2].args[1]
-    end
-    
-    all_members = length(filter(x-> typeof(x) != LineNumberNode,members))
-    dummy_args = []
-    rule_holder = :_rule_dict
-    for i in 1:(all_members-1) push!(dummy_args,gensym()) end
-    constructor = :($(esc(typename))($(dummy_args...))=$(esc(typename))($(dummy_args...),$(esc(rule_holder))))
-    quote
-        $s
-        $constructor
-    end
 end
 
 #have_method(t,meth_name) = haskey(get_rule_dict(),(meth_name,typeof(t)))
@@ -212,20 +178,5 @@ end
 
 have_method(t,meth_name) = !isnothing(t) && haskey(t._rule_dict,(meth_name,typeof(t)))
 get_method(t,meth_name) = t._rule_dict[(meth_name,typeof(t))]
-#==
-have_method(t,meth_name) = begin
-    f = nothing
-    try
-        f=eval(Symbol(meth_name))
-    catch e
-        if e isa UndefVarError
-            return false
-        else
-            rethrow(e)
-        end
-    end
-    return length(methods(f,Tuple{typeof(t),Any})) != 0
-end
 
-get_method(t,meth_name) = eval(Symbol(meth_name))
-==#
+#have_method(t,meth_name) = 

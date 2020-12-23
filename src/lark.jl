@@ -109,14 +109,22 @@ Lark(grammar::String,options,source,cache_file) = begin
     grammar = load_grammar(grammar, grammar_name=source)
     
     # Compile the EBNF grammar into BNF
-    terminals, rules, ignore_tokens = compile(grammar)
-    lexer_conf = LexerConf(terminals,ignore_tokens,options["postlex"],options["lexer_callbacks"])
-    if options["parser"] != nothing
-        parser = _build_parser(options,rules,lexer_conf)
-    elseif lexer != nothing
-        lexer = TraditionalLexer(lexer_conf.tokens,lexer_conf.ignore,lexer_conf.callbacks)
+    try
+        terminals, rules, ignore_tokens = compile(grammar)
+        lexer_conf = LexerConf(terminals,ignore_tokens,options["postlex"],options["lexer_callbacks"])
+        if options["parser"] != nothing
+            parser = _build_parser(options,rules,lexer_conf)
+        elseif lexer != nothing
+            lexer = TraditionalLexer(lexer_conf.tokens,lexer_conf.ignore,lexer_conf.callbacks)
+        end
+        Lark(options,source,grammar,terminals,rules,ignore_tokens,lexer_conf,parser)
+    catch ex
+        if ex isa TaskFailedException
+            rethrow(ex.task.exception)
+        else
+            rethrow(ex)
+        end
     end
-    Lark(options,source,grammar,terminals,rules,ignore_tokens,lexer_conf,parser)
 end
 
 _build_parser(options,rules,lexer_conf) = begin
@@ -151,6 +159,14 @@ lex(l::Lark, text) = begin
 end
 
 parse(l::Lark,text) = begin
-    parse(l.parser,text)
+    try
+        parse(l.parser,text)
+    catch ex
+        if ex isa TaskFailedException
+            rethrow(ex.task.exception)
+        else
+            rethrow(ex)
+        end
+    end
 end
 

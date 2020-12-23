@@ -178,11 +178,7 @@ create_callback(ptb::ParseTreeBuilder;transformer=nothing) = begin
         i = i+1
         # Now find the actual transformer function ...
         user_callback_name = if rule.alias != nothing rule.alias else rule.origin.name end
-        if have_method(transformer,user_callback_name)
-            f = partial(get_method(transformer,user_callback_name),transformer)
-        else
-            f = partial(Tree,user_callback_name)
-        end
+        f = partial(transformer_func,transformer,Val{Symbol(user_callback_name)}())
         rule.alias = internal_callback_name  #remember how to call it
         for w in wrapper_chain
             if isnothing(w)

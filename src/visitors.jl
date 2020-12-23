@@ -48,18 +48,34 @@ We can duplicate this with macros, if we want.
 abstract type Transformer_InPlace <: Transformer end
 abstract type Transformer_InPlaceRecursive <: Transformer end
 
+"""
+    transformer_func(t::Transformer,::Val{production},meta,args)
+
+`transformer_func` transforms `production` with children `args`. 
+Methods of this function are defined using the @rule and @inline_rule 
+macros and chosen by Julia method dispatch. `meta` is only used by the 
+default `transformer_func`.
+"""
+function transformer_func end
+
+"""
+    transformer_func(t::Transformer,::Val{N},meta,children) where N
+    
+Default `transformer_func`
+"""
+transformer_func(t::Transformer,::Val{N},meta,children) where N = begin
+    Tree(String(N),children,meta)
+end
+
+transformer_func(::Nothing,::Val{N},children) where N = Tree(String(N),children)
+    
 _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
     children = new_children
     if new_children == nothing
         children = tr.children
     end
-    if have_method(t,tr.data)
-        f = tr.data
-    else
-        return __default__(t,tr.data,children,tr._meta)
-    end
     println("Processing $(tr.data)")
-    return get_method(t,f)(t,children)
+    return transformer_func(t,Val{Symbol(tr.data)}(),tr._meta,children)
 end
 
 _transform_children(t::Transformer,children) = Channel() do chan
@@ -145,16 +161,9 @@ abstract type VisitorBase end
 abstract type Visitor <: VisitorBase end
 abstract type Visitor_Recursive <: VisitorBase end
 
-_call_userfunc(v::VisitorBase,tree) = begin
-    
-    if have_method(v,tree.data)
-        get_method(v,tree.data)(v,tree)
-    else
-        __default__(v,tree)
-    end
-end
+_call_userfunc(v::VisitorBase,tree) = transformer_func(v,Val{Symbol(tree.data)}(),nothing,tree)
 
-__default__(v::VisitorBase,tree) = tree
+transformer_func(v::VisitorBase,::Val,tree) = tree
 
 visit(v::Visitor,tree) = begin
     target_trees = collect(iter_subtrees(tree))
@@ -170,9 +179,7 @@ visit(v::Visitor_Recursive,tree) = begin
             visit(v,child)
         end
     end
-    if have_method(v,tree.data)
-        get_method(v,tree.data)(v,tree)
-    end
+    transformer_func(v,tree)
     return tree
 end
 
@@ -180,12 +187,15 @@ end
 
 abstract type Interpreter end
 
+"""
+    transformer_func(i::Interpreter,::Val,meta,tree)
+
+Default interpreter visitor does not automatically visit children
+"""
+transformer_func(i::Interpreter,::Val,meta,tree) = visit_children(i,tree)
+
 visit(inter::Interpreter,tree) = begin
-    if have_method(inter,tree.data)
-        get_method(inter,tree.data)(inter,tree)
-    else
-        return visit_children(inter,tree)
-    end
+    transformer_func(inter,Val{Symbol(tree.data)}(),nothing,tree)
 end
 
 visit_children(inter::Interpreter,tree) = begin
