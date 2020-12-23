@@ -113,25 +113,6 @@ end
 
 partial(f,a...) = (b...) -> return f(a...,b...)
 
-
-## Helpers for constructing subtypes with methods named after rules
-
-"""
-Add a field to the concrete type containing a dictionary of functions.
-
-Use as @has_rules struct .... end. A constructor for the type
-without the extra member is also defined. Not currently used
-"""
-macro add_rules(s)
-    if s.head != :struct
-        error("Macro @has_rules can only be used on structure definitions")
-    end
-    push!(s.args[3].args,:(_rule_methods::Dict{String,Function}))
-    # Create a default constructor
-    constructor = :($(s.args[2])(a,b,c) = ($(s.args[2]))(a,b,c,Dict()))
-    return :($s; $(esc(constructor)))
-end
-
 """
 Flag that the following method is a rule. Usage: @rule rule_name(t::Type,args) = begin .... end.
 There can only be one argument after the type argument, which will be the tree children.
@@ -172,11 +153,3 @@ macro inline_rule(s)
         Lerche.transformer_func($(s.args[1].args[2]),::Val{$rule_name},$(s.args[1].args[3:end]...)) = $(s.args[2])
     end)
 end
-
-#have_method(t,meth_name) = haskey(get_rule_dict(),(meth_name,typeof(t)))
-#get_method(t,meth_name) = get_rule_dict()[(meth_name,typeof(t))]
-
-have_method(t,meth_name) = !isnothing(t) && haskey(t._rule_dict,(meth_name,typeof(t)))
-get_method(t,meth_name) = t._rule_dict[(meth_name,typeof(t))]
-
-#have_method(t,meth_name) = 

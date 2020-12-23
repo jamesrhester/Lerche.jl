@@ -34,6 +34,15 @@ include("parser_frontends.jl")
 include("load_grammar.jl")
 include("lark.jl")
 
+# Compatibility for Julia < 1.4
+
+try
+    TaskFailedException
+catch ex
+    struct TaskFailedException <: Exception
+    end
+end     
+
 # Prepare the Lark EBNF parser
 
 const _lark_grammar = GrammarLoader()

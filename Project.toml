@@ -1,6 +1,6 @@
 name = "Lerche"
 uuid = "d42ef402-04e6-4356-9f73-091573ea58dc"
 authors = ["James.Hester <jxh@ansto.gov.au>"]
-version = "0.2.0"
+version = "0.3.0"
 [compat]
 julia = "1.2"
