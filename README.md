@@ -19,33 +19,24 @@ rule is the production that it should be called on.
 1. Define one or more subtypes of ``Transformer`` or ``Visitor`` to be
 used to dispatch the appropriate rule. The subtype can also be used to
 hold information if you wish, and must be a concrete type at present.
-1. Prefix the subtype definition with ``@contains_rules``
 1. For every production in your grammar that you wish to transform,
 write a rule with identical name to the production
 1. The rule should be prefixed with ``@rule`` if the second argument
 is an array containing all of the arguments to the grammar production
 1. The rule should be prefixed with ``@inline_rule`` if the second
 and following arguments refer to each argument in the grammar production
-1. Near the top of the module containing your subtypes and rules, put
-``@rule_holder`` on a line by itself (may be unnecessary in the future).
 
-For a real-world example of usage, see [this file](https://github.com/jamesrhester/CIF_dREL.jl/blob/master/src/jl_transformer.jl).
+For a real-world example of usage, see [this file](https://github.com/jamesrhester/DrelTools.jl/blob/master/src/jl_transformer.jl).
 
 # Notes for Lark users
 
 Please read the Lark documentation.  When converting from Lark
 programs written in Python to Lerche programs written in Julia, the
-changes outlined below are necessary. Note that before version 1.0 use
-of the ``@contains_rules`` and ``@rule_holder`` macros is likely to
-be simplified.
+changes outlined below are necessary.
 
 1. All Transformer and Visitor classes become types
 1. All class method calls become Julia method calls with the type as the first argument
 (i.e. replacing ``self``)
-1. Transformers and visitors should be declared in a single module with the
-macro ``@rule_holder`` on a line by itself before any type definitions
-1. Transformers and visitors should be declared as subtypes of the appropriate
-visitor/transformer type, preceded by the macro ``@contains_rules``
 1. Transformation or visitor rules should be preceded by the ``@rule`` macro. Inline
 rules use the ``@inline_rule`` macro. 
 1. The first argument of transformation and visitor rules is a variable of the
@@ -75,10 +66,6 @@ pre-processed it.
 3. While unicode escapes are recognised (``\uxxxx``), the Python
 ``\x`` combination to insert a particular byte value in the
 string is not.
-
-4. Avoid using Julia keywords (such as ``true`` or ``false``) as the
-names of rules or aliases.  If your Lark grammar does this, you will
-need to change it.
 
 # Example
 
@@ -117,7 +104,7 @@ Items can be transformed as they are parsed, for example, in order to
 immediately turn strings into numbers.  A subtype of ``Transformer``
 can be passed as an additional keyword argument when creating the
 parser in order to do this.  A method whose name matches the rule
-name (or alias) and whose first argument is our subtype of
+name (or alias) and whose first argument has our subtype of
 ``Transformer`` will be called whenever that rule is matched.
 
 These methods are prefixed by the ``@rule`` macro (if all of the
@@ -126,9 +113,8 @@ parse tree children are collected into a single array argument) or
 argument each).
 
 ```julia
-@rule_holder #needed once in the module
 
-@contains_rules struct TreeToJson <: Transformer end
+struct TreeToJson <: Transformer end
 
 @inline_rule string(t::TreeToJson, s) = replace(s[2:end-1],"\\\""=>"\"")
 
@@ -188,9 +174,6 @@ The priority has been on maintaining fidelity with Lark.
 
 Python "yield" has been implemented using Julia Channels.
 
-The ``@rule_holder`` and ``@contains_rules`` macros have been implemented in
-order to store rule information in a dictionary local to the calling module. 
-So far it has not been possible to store information within Lerche data structures from outside the
-``Lerche`` module, and perhaps this is a good thing. Ideally Julia's multiple
-dispatch mechanism would be used to select the appropriate rule, but no way
-to reliably go from rule name as a string to dispatch on method name has been found.
+The @rule and @inline_rule macros define methods of Lerche function
+`transformer_func`. Julia multiple dispatch is used to select the
+appropriate method at runtime.

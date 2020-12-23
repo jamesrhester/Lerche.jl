@@ -63,11 +63,11 @@ function transformer_func end
     
 Default `transformer_func`
 """
-transformer_func(t::Transformer,::Val{N},meta,children) where N = begin
+transformer_func(t::Transformer,::Val{N},meta::Meta,children) where N = begin
     Tree(String(N),children,meta)
 end
 
-transformer_func(::Nothing,::Val{N},children) where N = Tree(String(N),children)
+transformer_func(::Nothing,::Val{N},::Meta,children) where N = Tree(String(N),children)
     
 _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
     children = new_children
@@ -161,7 +161,7 @@ abstract type VisitorBase end
 abstract type Visitor <: VisitorBase end
 abstract type Visitor_Recursive <: VisitorBase end
 
-_call_userfunc(v::VisitorBase,tree) = transformer_func(v,Val{Symbol(tree.data)}(),nothing,tree)
+_call_userfunc(v::VisitorBase,tree) = transformer_func(v,Val{Symbol(tree.data)}(),Meta(),tree)
 
 transformer_func(v::VisitorBase,::Val,tree) = tree
 
@@ -195,7 +195,7 @@ Default interpreter visitor does not automatically visit children
 transformer_func(i::Interpreter,::Val,meta,tree) = visit_children(i,tree)
 
 visit(inter::Interpreter,tree) = begin
-    transformer_func(inter,Val{Symbol(tree.data)}(),nothing,tree)
+    transformer_func(inter,Val{Symbol(tree.data)}(),Meta(),tree)
 end
 
 visit_children(inter::Interpreter,tree) = begin

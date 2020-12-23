@@ -169,6 +169,10 @@ end
 # parse tree is constructed using Tree, which can later be
 # visited by transformers or visitors.
 
+# Note the use of partial to store partial information about
+# the appropriate transformer to call, for later application.
+# We have to supply a dummy "nothing" argument for meta.
+
 create_callback(ptb::ParseTreeBuilder;transformer=nothing) = begin
     callback = Dict()
     i = 0
@@ -178,7 +182,7 @@ create_callback(ptb::ParseTreeBuilder;transformer=nothing) = begin
         i = i+1
         # Now find the actual transformer function ...
         user_callback_name = if rule.alias != nothing rule.alias else rule.origin.name end
-        f = partial(transformer_func,transformer,Val{Symbol(user_callback_name)}())
+        f = partial(transformer_func,transformer,Val{Symbol(user_callback_name)}(),Meta())
         rule.alias = internal_callback_name  #remember how to call it
         for w in wrapper_chain
             if isnothing(w)

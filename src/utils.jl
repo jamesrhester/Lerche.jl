@@ -148,7 +148,7 @@ macro rule(s)
     rule_type = s.args[1].args[2].args[2] # the type name
     println("Rule name: $rule_name, Rule type $rule_type")
     esc(quote
-        Lerche.transformer_func($(s.args[1].args[2]),::Val{$rule_name},meta,$(s.args[1].args[3])) = $(s.args[2])
+        Lerche.transformer_func($(s.args[1].args[2]),::Val{$rule_name},meta::Lerche.Meta,$(s.args[1].args[3])) = $(s.args[2])
     end )
 end
    
@@ -168,7 +168,7 @@ macro inline_rule(s)
     println("Inline rule name: $rule_name, Rule type $rule_type")
     println("Args $(s.args[1].args)")
     esc(quote
-        Lerche.transformer_func(x::$rule_type,y::Val{$rule_name},meta,z::Array) = Lerche.transformer_func(x,y,z...) 
+        Lerche.transformer_func(x::$rule_type,y::Val{$rule_name},meta::Lerche.Meta,z::Array) = Lerche.transformer_func(x,y,z...) 
         Lerche.transformer_func($(s.args[1].args[2]),::Val{$rule_name},$(s.args[1].args[3:end]...)) = $(s.args[2])
     end)
 end
