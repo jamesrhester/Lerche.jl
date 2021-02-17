@@ -125,18 +125,20 @@ feed
 
 Consume a token and calculate the new line & column.
 As an optional optimization, set test_newline=false if token doesn't contain a newline.
-TODO: check indexing is correct
 """
 feed!(lc::LineCounter,token;test_newline=true) = begin
+    #println("Handling $token")
     if test_newline
         newlines = count(x -> x == lc.newline_char, token)
         if newlines > 0
-            lc.line = lc.line + 1
+            lc.line = lc.line + newlines
             lc.line_start_pos = lc.char_pos + first(findlast("$(lc.newline_char)",token))
+            #println("Line $(lc.line) starts at $(lc.line_start_pos)")
         end
     end
-    lc.char_pos += length(token)
+    lc.char_pos += ncodeunits(token)  #Unicode
     lc.column = lc.char_pos - lc.line_start_pos + 1
+    #println("At end column is $(lc.column) for char pos $(lc.char_pos) token length $(length(token))")
 end
 
 #==
@@ -153,16 +155,20 @@ abstract type Lexer end
 # The lex function creates a channel which is iterated over to get the
 # tokens. If state_src is not nothing, it is a channel from which to obtain
 # the next parser state to determine the correct lexer to use.
+#
+# Julia `match` will not anchor to the first character, so in our mre construction
+# we make sure that `^` is the first character to force rapid matching
+#
 lex(l::Lexer,stream::String,newline_types,ignore_types) = Channel() do token_chan
         newline_types = Set(newline_types)
         ignore_types = Set(ignore_types)
 
     line_ctr = LineCounter()
     sub_lexer = get_lexer(l)  #For contextual lexers
-    while line_ctr.char_pos <= length(stream)
+    while line_ctr.char_pos <= ncodeunits(stream)
         #println("Now at char pos $(line_ctr.char_pos)")
         mres,names_by_idx = sub_lexer.mres   #
-        m = Base.match(mres,stream,line_ctr.char_pos)
+        m = Base.match(mres,SubString(stream,line_ctr.char_pos))
         if m == nothing || m.match == ""
             throw(UnexpectedCharacters(stream,line_ctr.char_pos, line_ctr.line,
                                        line_ctr.column))
@@ -198,11 +204,16 @@ end
 #    mres
 #end
 
-# This checks for patterns that belong to different REs
+# This and `_create_unless` check for strings that will also match
+# REs. If a string pattern is matched by a re pattern, and the
+# string has a greater priority, then even if the re pattern
+# matches, the actual match will be the string pattern.
+#
 unless_callback(mres) = function (t)
     # Note that mres is a single tuple as we are not splitting
     # REs into 100-pattern chunks unlike Python
     mre, type_from_index = mres
+    #println("Unless...$mre for $(t.value)")
     m = Base.match(mre,t.value,1)
     if m != nothing
         t.type_ = type_from_index[lastmatch(m)]
@@ -240,10 +251,10 @@ end
 # The python version is convoluted due to the maximum number of groups of 100
 # Don't know yet if this applies to Julia. Match whole means that the regex
 # must match the whole expression e.g. when checking tokens for matches with
-# other things.
+# other things. "\A" forces the match to match at the beginning.
 build_mres(terminals;match_whole=false) = begin
-    postfix = ""
-    prefix = ""
+    postfix = ")"
+    prefix = raw"\A("
     if match_whole
         postfix = "\$"
         prefix = "^"
@@ -315,6 +326,7 @@ ContextualLexer(terminals,states,state_channel;ignore=(),always_accept=(),user_c
     lexers = Dict()
     lexer = missing  #define in scope
     for (state,accepts) in states
+        #println("State $state accepts $accepts")
         key = Set(accepts)
         try
             lexer = lexer_by_tokens[key]
@@ -323,6 +335,7 @@ ContextualLexer(terminals,states,state_channel;ignore=(),always_accept=(),user_c
             state_tokens = [tokens_by_name[n] for n in accepts if (n != nothing && n in keys(tokens_by_name))]
             lexer = TraditionalLexer(state_tokens, ignore=ignore, user_callbacks=user_callbacks)
             lexer_by_tokens[key] = lexer
+            #println("Added lexer that accepts $key")
         end
         lexers[state] = lexer
     end

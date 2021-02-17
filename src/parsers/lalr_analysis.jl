@@ -13,8 +13,8 @@ struct Action
     name::String
 end
 
-Shift = Action("Shift")
-Reduce = Action("Reduce")
+const Shift = Action("Shift")
+const Reduce = Action("Reduce")
 
 struct ParseTable
     states #::Dict{Set{RulePtr},Dict{String,Tuple{Action,Union{Rule,Set{RulePtr}}}}}
@@ -76,7 +76,7 @@ compute_lookahead!(l::LALR_Analyzer) = begin
     l.states = Dict()
     # println("Start state: $(l.start_state)")
     step(state) = Channel() do state_chan
-        # println("Analysing state: $state")
+        #println("Analysing state: $state")
         lookahead = Dict{LarkSymbol,Array{Tuple{Action,
                                                 Union{Rule,Set{RulePtr}}}}}()  #should be list if missing (Python defaultdict(list))
         sat, unsat = classify_bool(state, rp -> is_satisfied(rp))
@@ -90,10 +90,10 @@ compute_lookahead!(l::LALR_Analyzer) = begin
         #println("Unsatisfied rules: $unsat")
         d = classify(unsat, key=rp -> next(rp))
         for (sym,rps) in d
-            # println("Looking at $sym, Rule pointers are $rps")
+            #println("Looking at $sym, Rule pointers are $rps")
             rps = Set(advance(rp,sym) for rp in rps)
             #println("One step forward...$rps")
-            for rp in rps
+            for rp in Set(rps)  #make a copy
                 if !is_satisfied(rp) && !(is_terminal(next(rp)))
                     union!(rps,expand_rule(l,next(rp)))
                     #println("Added more rules: Rule pointers now $rps")
@@ -101,7 +101,7 @@ compute_lookahead!(l::LALR_Analyzer) = begin
             end
             new_state = Set(rps)
             get!(lookahead,sym,[])
-            # println("Adding Shift to $sym")
+            #println("Adding Shift to $sym")
             push!(lookahead[sym],(Shift,new_state))
             if sym == Terminal("\$END")
                 push!(l.end_states,new_state)

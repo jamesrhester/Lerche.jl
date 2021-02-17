@@ -77,7 +77,9 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
 #        println("Reducing according to $rule")
         size = length(rule.expansion)
         if size>0
-            s = value_stack[end-size+1:end]
+            # The end of the stack is going, so we don't
+            # even care if the callback modifies it
+            s = @view value_stack[end-size+1:end]
             state_stack = state_stack[1:end-size]
             value_stack = value_stack[1:end-size]
         else
@@ -94,7 +96,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
 
     # Main LALR-parser loop
     for token in seq
-        println("Seen token $token, type $(token.type_)")
+        #println("Seen token $token, type $(token.type_)")
         while true
             action, arg = get_action(token)
             @assert arg != p.end_state

@@ -43,6 +43,14 @@ classify(seq;key=nothing,value=nothing) = begin
     return d
 end
 
+"""
+    bfs(initial,expand)
+
+Call function `expand` on elements of `initial` and 
+any newly generated elements until
+no new elements are generated. A sequence of elements
+are returned via a channel.
+"""
 bfs(initial,expand) = Channel() do q_chan
     # Python: open_q = deque(list(initial))
     open_q = collect(initial)

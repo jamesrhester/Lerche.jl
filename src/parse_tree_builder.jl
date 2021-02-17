@@ -65,16 +65,16 @@ PropagatePositions(node_builder::Function) = function(children)
     return res
 end
 
+# Note: we explicitly give the type of `filtered`, otherwise
+# it will adopt the type of c[i].children, which may be
+# a subarray and therefore not allow later push! operations.
+
 ChildFilterLALR(to_include,node_builder) = function(c)
     #println("Filtering children: $to_include")
-    filtered = []
+    filtered = Union{Token,Tree}[]
     for (i, to_expand) in to_include
             if to_expand
-                if !isempty(filtered)
-                    append!(filtered, c[i].children)
-                else   # Optimize for left-recursion
-                    filtered = c[i].children
-                end
+                append!(filtered, c[i].children)
             else
                 push!(filtered,c[i])
             end
