@@ -51,16 +51,17 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
 #    println("All known keys:")
 #    for k in keys(p.callbacks)
 #        println("$k")
-#    end
-    state_stack = [p.start_state]
-    value_stack = []
+    #    end
+    state_stack = Stack{Any}()
+    state_stack = push!(state_stack,p.start_state)
+    value_stack = Stack{Any}()
 
     if set_state != nothing
         set_state(p.start_state)
     end
     
     get_action(token) = begin
-        state = state_stack[end]
+        state = first(state_stack)
         try
             return states[state][token.type_]
         catch e
@@ -77,18 +78,17 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
 #        println("Reducing according to $rule")
         size = length(rule.expansion)
         if size>0
-            # The end of the stack is going, so we don't
-            # even care if the callback modifies it
-            s = @view value_stack[end-size+1:end]
-            state_stack = state_stack[1:end-size]
-            value_stack = value_stack[1:end-size]
+            s = grab!(value_stack,size)
+            for i = 1:size
+                pop!(state_stack)
+            end
         else
             s = []
         end
         
         value = p.callbacks[rule](s)
 
-        _action, new_state = states[state_stack[end]][rule.origin.name]
+        _action, new_state = states[first(state_stack)][rule.origin.name]
         @assert _action == Shift
         push!(state_stack,new_state)
         push!(value_stack,value)
@@ -117,7 +117,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
                 end
                 reduce(arg)
                 if debug
-                    println("Reduced to \n $(state_stack[end])")
+                    println("Reduced to \n $(first(state_stack))")
                     println("Stack: $value_stack")
                 end
             end
@@ -131,8 +131,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
         if _action == Shift
             @assert arg == p.end_state
             @assert length(value_stack) == 1
-            val = value_stack[1]
-            return val
+            return pop!(value_stack)
         else
             reduce(arg)
         end

@@ -1,5 +1,7 @@
 module Lerche
 
+using DataStructures  #For Stack when parsing
+
 export Tree, Token, Interpreter,Transformer, visit_children, visit,transform
 export GrammarError, ParseError, UnexpectedToken, UnexpectedCharacters
 export UnexpectedInput

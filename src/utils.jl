@@ -161,3 +161,16 @@ macro inline_rule(s)
         Lerche.transformer_func($(s.args[1].args[2]),::Val{$rule_name},$(s.args[1].args[3:end]...)) = $(s.args[2])
     end)
 end
+
+"""
+    grab!(s::Stack,n)
+
+Pop! the top `n` elements of `s`, returning them as a list in order of removal
+"""
+grab!(s::Stack,n) = begin
+    output = []
+    for i in 1:n
+        push!(output,pop!(s))
+    end
+    return reverse!(output)
+end
