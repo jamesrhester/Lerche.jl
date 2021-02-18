@@ -89,7 +89,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
         value = p.callbacks[rule](s)
 
         _action, new_state = states[first(state_stack)][rule.origin.name]
-        @assert _action == Shift
+        @assert _action == :shift
         push!(state_stack,new_state)
         push!(value_stack,value)
     end
@@ -101,7 +101,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
             action, arg = get_action(token)
             @assert arg != p.end_state
             
-            if action == Shift
+            if action == :shift
                 if debug
                     println("Seen $(token.type_),\n shifting to state $arg")
                 end
@@ -128,7 +128,7 @@ parse(p::_LALRParser,seq; set_state = nothing, debug=false) = begin
     token = if token != nothing new_borrow_pos("\$END","",token) else Token("\$END","",pos_in_stream=1,line=1,column=1) end
     while true
         _action, arg = get_action(token)
-        if _action == Shift
+        if _action == :shift
             @assert arg == p.end_state
             @assert length(value_stack) == 1
             return pop!(value_stack)

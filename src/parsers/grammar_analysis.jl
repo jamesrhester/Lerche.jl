@@ -151,7 +151,7 @@ init_analyser!(g::GrammarAnalyzer,parser_conf;debug=false) = begin
     @assert length(rules) == length(Set(rules))
     for r in rules
         for sym in r.expansion
-            if !(is_terminal(sym) || sym in collect(keys(g.rules_by_origin)))
+            if !(is_terminal(sym) || sym in keys(g.rules_by_origin))
                 throw(GrammarError("Using an undefined rule: $sym"))
             end
         end

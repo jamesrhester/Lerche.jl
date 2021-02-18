@@ -9,15 +9,20 @@ For now, shift/reduce conflicts are automatically resolved as shifts.
 # Adapted from Python by James Hester (2019)
 # Email: james.r.hester@gmail.com
 
+#==
 struct Action
-    name::String
+    name::Symbol
 end
+abstract type Action end
+struct Shift <: Action end
+struct Reduce <: Action end
 
-const Shift = Action("Shift")
-const Reduce = Action("Reduce")
+#const Shift = Action("Shift")
+#const Reduce = Action("Reduce")
+==#
 
 struct ParseTable
-    states #::Dict{Set{RulePtr},Dict{String,Tuple{Action,Union{Rule,Set{RulePtr}}}}}
+    states #::Dict{Set{RulePtr},Dict{String,Tuple{Symbol,Union{Rule,Set{RulePtr}}}}}
     start_state
     end_state
 end
@@ -36,7 +41,7 @@ from_ParseTable(parse_table) = begin
     ==#
     
     for (s,la) in parse_table.states
-        la = Dict([(k=>if v[1] == Shift
+        la = Dict([(k=>if v[1] == :shift
                        (v[1],state_to_idx[v[2]])
                        else
                         v end) for (k,v) in la])
@@ -77,14 +82,14 @@ compute_lookahead!(l::LALR_Analyzer) = begin
     # println("Start state: $(l.start_state)")
     step(state) = Channel() do state_chan
         #println("Analysing state: $state")
-        lookahead = Dict{LarkSymbol,Array{Tuple{Action,
+        lookahead = Dict{LarkSymbol,Array{Tuple{Symbol,
                                                 Union{Rule,Set{RulePtr}}}}}()  #should be list if missing (Python defaultdict(list))
         sat, unsat = classify_bool(state, rp -> is_satisfied(rp))
         for rp in sat
             #println("Stepping: rp is $rp")    
             for term in get(l.FOLLOW,rp.rule.origin,())
                 get!(lookahead,term,[])
-                push!(lookahead[term],(Reduce,rp.rule))
+                push!(lookahead[term],(:reduce,rp.rule))
             end
         end
         #println("Unsatisfied rules: $unsat")
@@ -102,7 +107,7 @@ compute_lookahead!(l::LALR_Analyzer) = begin
             new_state = Set(rps)
             get!(lookahead,sym,[])
             #println("Adding Shift to $sym")
-            push!(lookahead[sym],(Shift,new_state))
+            push!(lookahead[sym],(:shift,new_state))
             if sym == Terminal("\$END")
                 push!(l.end_states,new_state)
             end
@@ -115,7 +120,7 @@ compute_lookahead!(l::LALR_Analyzer) = begin
                     println("WARNING: Shift/reduce conflict for $(k.name): $v. Resolving as shift")
                 end
                 for x in v
-                    if x[1] == Shift
+                    if x[1] == :shift
                         lookahead[k] = [x]
                     end
                 end

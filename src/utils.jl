@@ -165,12 +165,12 @@ end
 """
     grab!(s::Stack,n)
 
-Pop! the top `n` elements of `s`, returning them as a list in order of removal
+Pop! the top `n` elements of `s`, returning them as a list in reverse order of removal
 """
-grab!(s::Stack,n) = begin
-    output = []
+grab!(s::Stack{T},n) where T = begin
+    output = Array{T,1}(undef,n)
     for i in 1:n
-        push!(output,pop!(s))
+        output[n-i+1] = pop!(s)
     end
-    return reverse!(output)
+    return output
 end

@@ -175,18 +175,18 @@ lex(l::Lexer,stream::String,newline_types,ignore_types) = Channel() do token_cha
         end
         t = nothing
         value = m.match
-        match_num = min([i for (i,v) in enumerate(m.captures) if !isnothing(v)]...)
+        match_num = findfirst(v -> v!=nothing,m.captures)
         type_ = names_by_idx[match_num]
         #println("Preliminary match: $type_")
         if !(type_ in ignore_types)
             t = Token(type_,value,pos_in_stream=line_ctr.char_pos,line=line_ctr.line,column=line_ctr.column)
-            if t.type_ in collect(keys(sub_lexer.callback))
-                t = sub_lexer.callback[t.type_](t)
+            if type_ in keys(sub_lexer.callback)
+                t = sub_lexer.callback[type_](t)
             end
             put!(token_chan,t)
             sub_lexer = get_lexer(l)  #wait for update
         else
-            if type_ in collect(keys(sub_lexer.callback))
+            if type_ in keys(sub_lexer.callback)
                 t = Token(type_, value, pos_in_stream=line_ctr.char_pos, line=line_ctr.line, column=line_ctr.column)
                 sub_lexer.callback[type_](t)
             end
@@ -233,7 +233,7 @@ _create_unless(terminals) = begin
             end
             s = strtok.pattern.value
             m = Base.match(Regex(to_regexp(retok.pattern)),s)
-            if !isnothing(m) && m.match == s
+            if m!=nothing && m.match == s
                 push!(unless,strtok)
                 if get_flags(strtok.pattern) <= get_flags(retok.pattern)
                     push!(embedded_strs,strtok)
@@ -358,7 +358,7 @@ get_lexer(l::Lexer) = l
 get_lexer(cl::ContextualLexer) = begin
     tt = time()
     #println("$tt: waiting for state change")
-    flush(stdout)
+    #flush(stdout)
     new_state = take!(cl.state_source)
     tt = time()
     #println("$tt: Set lexer parser state to $new_state")

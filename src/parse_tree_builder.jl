@@ -145,14 +145,14 @@ end
 _init_builders(rules,all_tokens,ambiguous,propagate_positions) = Channel() do buildchan
     for rule in rules
         options = rule.options
-        keep_all_tokens = all_tokens || (if !isnothing(options) 
+        keep_all_tokens = all_tokens || (if options != nothing 
                                          options.keep_all_tokens
                                          else false end)
-        expand_single_child = if !isnothing(options) options.expand1 else false end
+        expand_single_child = if options != nothing options.expand1 else false end
         wrapper_chain =
             filter(x-> typeof(x) != Bool, [
                 if propagate_positions PropagatePositions else false end,
-                if (expand_single_child && isnothing(rule.alias)) ExpandSingleChild else false end,
+                if (expand_single_child && rule.alias == nothing) ExpandSingleChild else false end,
                 maybe_create_child_filter(rule.expansion, keep_all_tokens),
                 if ambiguous
                 maybe_create_ambiguous_expander(rule.expansion,keep_all_tokens)
@@ -185,9 +185,9 @@ create_callback(ptb::ParseTreeBuilder;transformer=nothing) = begin
         f = partial(transformer_func,transformer,Val{Symbol(user_callback_name)}(),Meta())
         rule.alias = internal_callback_name  #remember how to call it
         for w in wrapper_chain
-            if isnothing(w)
+            if w == nothing
                 println("Rule $rule has a nothing in the wrapper!!")
-                @assert !isnothing(w)
+                @assert w!=nothing
             end
             f = w(f)  #ExpandSingleChild, maybe_create_child_filter,propagate positions
         end
