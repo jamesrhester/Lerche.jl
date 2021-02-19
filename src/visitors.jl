@@ -68,7 +68,9 @@ transformer_func(t::Transformer,::Val{N},meta::Meta,children) where N = begin
 end
 
 transformer_func(::Nothing,::Val{N},::Meta,children) where N = Tree(String(N),children)
-    
+
+# Note that `new_children` replaces `tr.children` as the idea is that they
+# have been processed if they are provided as an argument
 _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
     children = new_children
     if new_children == nothing
@@ -78,13 +80,14 @@ _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
     return transformer_func(t,Val{Symbol(tr.data)}(),tr._meta,children)
 end
 
-_transform_children(t::Transformer,children) = Channel() do chan
-    for c in children
+# No need for a channel here as we just collect the results anyway.
+_transform_children(t::Transformer,children)::Array{Any} = begin
+    map(children) do c
         try
             if c isa Tree
-                put!(chan,_transform_tree(t,c))
+                _transform_tree(t,c)
             else
-                put!(chan,c)
+                c
             end
         catch e
             # For production, drop the error...
@@ -95,7 +98,7 @@ _transform_children(t::Transformer,children) = Channel() do chan
 end
 
 _transform_tree(t::Transformer,tree) = begin
-    children = collect(_transform_children(t,tree.children))
+    children = _transform_children(t,tree.children)
     #println("Children were $(tree.children), now $children")
     return _call_userfunc(t,tree,new_children=children)
 end
@@ -143,13 +146,13 @@ end
 
 
 _transform_tree(tipr::Transformer_InPlaceRecursive,tree) = begin
-    tree.children = collect(_transform_children(tipr,tree.children))
+    tree.children = _transform_children(tipr,tree.children)
     return _call_userfunc(tipr,tree)
 end
 
 transform(tip::Transformer_InPlace, tree) = begin
-    for subtree in collect(iter_subtrees(tree))
-        subtree.children = collect(_transform_children(tip,subtree.children))
+    for subtree in iter_subtrees(tree)
+        subtree.children = _transform_children(tip,subtree.children)
     end
     return _transform_tree(tip,tree)
 end
@@ -166,8 +169,7 @@ _call_userfunc(v::VisitorBase,tree) = transformer_func(v,Val{Symbol(tree.data)}(
 transformer_func(v::VisitorBase,::Val,tree) = tree
 
 visit(v::Visitor,tree) = begin
-    target_trees = collect(iter_subtrees(tree))
-    for (i,subtree) in enumerate(target_trees)
+    for subtree in iter_subtrees(tree)
         _call_userfunc(v,subtree)
     end
     return tree
