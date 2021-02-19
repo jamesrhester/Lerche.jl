@@ -8,3 +8,4 @@ DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 
 [compat]
 julia = "1.2"
+DataStructures = "^0.18.0"
