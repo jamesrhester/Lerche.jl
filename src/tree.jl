@@ -74,13 +74,29 @@ Base.hash(t1::Tree) = begin
 end
 
 find_pred(t::Tree,pred) = begin
-    filter(pred, collect(iter_subtrees(t)))
+    Iterators.filter(pred, t)
 end
 
 find_data(t::Tree,data) = begin
     find_pred(t, x -> x.data == data)
 end
 
+# Test only non-tree values for `pred`
+scan_values(t::Tree,pred) = begin
+    result = Any[]
+    for c in t.children
+        if typeof(c) == Tree
+            append!(result,scan_values(c,pred))
+        else
+            if pred(c)
+                push!(result,c)
+            end
+        end
+    end
+    return result
+end
+
+#==
 scan_values(t::Tree,pred) = Channel() do val_chan
     begin
         for c in t.children
@@ -96,9 +112,9 @@ scan_values(t::Tree,pred) = Channel() do val_chan
         end
     end
 end
+==#
 
-
-iter_subtrees(t::Tree) = Channel() do tree_chan
+Base.iterate(t::Tree) = begin
     visited = Set()
     q = [t]
     l = []
@@ -112,13 +128,25 @@ iter_subtrees(t::Tree) = Channel() do tree_chan
         append!(q,[c for c in subtree.children if typeof(c) == Tree])
     end
     seen = Set()
-    for x in reverse(l)
-        if !(objectid(x) in seen)
-            put!(tree_chan,x)
-            push!(seen,objectid(x))
-        end
-    end
+    idx = length(l)
+    if idx == 0 return nothing end
+    push!(seen,objectid(l[idx]))
+    return l[idx],(seen,l,idx)
 end
+
+# `s` is a tuple `(seen,l,idx)` where `idx` is the most
+# recently returned index.
+Base.iterate(t::Tree,s) = begin
+    seen,l,idx = s
+    idx = idx -1
+    while idx > 0 && objectid(l[idx]) in seen
+        idx = idx - 1
+    end
+    if idx == 0 return nothing end
+    push!(seen,objectid(l[idx]))
+    return l[idx],(seen,l,idx)
+end
+
 
 tree_set(t::Tree,data,children) = begin
     t.data = data

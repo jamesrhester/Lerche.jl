@@ -623,7 +623,7 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
         else
             @assert symbol.type_ == "RULE"
             rule = imported_rules[symbol]
-            for t in iter_subtrees(rule[2])
+            for t in rule[2]
                 for (i, c) in enumerate(t.children)
                     if c isa Token && c.type_ in ("RULE", "TERMINAL")
                         t.children[i] = Token(c.type_, get_namespace_name(c))

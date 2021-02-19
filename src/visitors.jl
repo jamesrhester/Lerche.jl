@@ -81,6 +81,8 @@ _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
 end
 
 # No need for a channel here as we just collect the results anyway.
+# We annotate the return type as otherwise Julia will assume the type
+# is the type of the first returned value.
 _transform_children(t::Transformer,children)::Array{Any} = begin
     map(children) do c
         try
@@ -151,7 +153,7 @@ _transform_tree(tipr::Transformer_InPlaceRecursive,tree) = begin
 end
 
 transform(tip::Transformer_InPlace, tree) = begin
-    for subtree in iter_subtrees(tree)
+    for subtree in tree
         subtree.children = _transform_children(tip,subtree.children)
     end
     return _transform_tree(tip,tree)
@@ -169,7 +171,7 @@ _call_userfunc(v::VisitorBase,tree) = transformer_func(v,Val{Symbol(tree.data)}(
 transformer_func(v::VisitorBase,::Val,tree) = tree
 
 visit(v::Visitor,tree) = begin
-    for subtree in iter_subtrees(tree)
+    for subtree in tree
         _call_userfunc(v,subtree)
     end
     return tree
