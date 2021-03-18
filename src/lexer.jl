@@ -23,7 +23,15 @@ Base.hash(p1::Pattern) = begin
 end
 
 _get_flags(p1::Pattern,value) = begin
-    for f in get_flags(p1)
+    add_flags(get_flags(p1),value)
+end
+
+"""
+Add the characters in `flags` as regexp flags for
+regular expression `value`
+"""
+add_flags(flags,value) = begin
+    for f in flags
         value = ("(?$f)"*value)
     end
     return value
@@ -37,6 +45,7 @@ end
 struct PatternRE <: Pattern
     value::String
     flags::Set{Char}
+    _width
 end
 
 PatternRE(value;flags=Set()) = PatternRE(value,flags)
@@ -44,11 +53,12 @@ PatternRE(value,flags::String) = PatternRE(value,Set(flags))
 PatternStr(value,flags::String) = PatternStr(value,Set(flags))
 PatternStr(value,flags::Char) = PatternStr(value,[flags])
 PatternRE(value,flags::Char) = PatternRE(value,[flags])
+PatternRE(value,flags::Set) = PatternRE(value,flags,get_regexp_width(add_flags(flags,value)))
 
-to_regexp(pre::PatternRE) = _get_flags(pre,pre.value)
+to_regexp(pre::PatternRE) = add_flags(pre.flags,pre.value)
 to_regexp(pstr::PatternStr) = _get_flags(pstr,escape_re_string(pstr.value))
-min_width(pre::PatternRE) = get_regexp_width(to_regexp(pre))[1]
-max_width(pre::PatternRE) = get_regexp_width(to_regexp(pre))[2]
+min_width(pre::PatternRE) = pre._width[1]
+max_width(pre::PatternRE) = pre._width[2]
 
 min_width(pstr::PatternStr) = length(pstr.value)
 max_width(pstr::PatternStr) = min_width(pstr)
@@ -61,29 +71,46 @@ end
 
 TerminalDef(name,pattern; priority=1) = TerminalDef(name,pattern,priority)
 
-# TODO: make this a real subtype of AbstractString. Meanwhile, we simply
-# reimplement those string methods that are used elsewhere
+"""
+    A string with meta-information, that is produced by the lexer.
 
+    When parsing text, the resulting chunks of the input that haven't been discarded,
+    will end up in the tree as Token instances. Token is a subclass of AbstractString
+    so normal string comparisons and operations will work as expected.
+
+    Attributes:
+        type: Name of the token (as specified in grammar)
+        value: Value of the token (redundant, as ``token.value == token`` will always be true)
+        pos_in_stream: The index of the token in the text
+        line: The line of the token in the text (starting with 1)
+        column: The column of the token in the text (starting with 1)
+        end_line: The line where the token ends
+        end_column: The next column after the end of the token. For example,
+            if the token is a single character with a column value of 4,
+            end_column will be 5.
+        end_pos: the index where the token ends (basically ``pos_in_stream + length(token)``)
+"""
 mutable struct Token <: AbstractString
-    type_::String
+    type_::String  #type is a Julia keyword
     pos_in_stream::Union{Int,Nothing}
     value::String
     line::Union{Int,Nothing}
     column::Union{Int,Nothing}
     end_line::Union{Int,Nothing}
     end_column::Union{Int,Nothing}
+    end_pos::Union{Int,Nothing}
 end
 
 Token(type_,value;pos_in_stream=nothing,line=nothing,column=nothing) =
-    Token(type_,pos_in_stream,value,line,column,nothing,nothing)
+    Token(type_,pos_in_stream,String(value),line,column,nothing,nothing,nothing)
 
 # Reimplement some string methods for later use...
 Base.ncodeunits(t::Token) = ncodeunits(t.value)
 Base.codeunit(t::Token) = codeunit(t.value)
 Base.codeunit(t::Token,i::Integer) = codeunit(t.value,i)
 Base.isvalid(t::Token,i::Int64) = isvalid(t.value,i)
-Base.iterate(t::Token) = iterate(t.value)
-Base.iterate(t::Token,i::Int64) = iterate(t.value,i)
+Base.iterate(t::Token) = Base.iterate(t.value)
+Base.iterate(t::Token,i::Int64) = Base.iterate(t.value,i)
 
 # Lexer.py implements a generic equality, where any comparison other
 # than with another token defaults to string comparison
@@ -106,7 +133,15 @@ Base.hash(t1::Token) = hash(t1.value)
 
 Base.show(io::IO,t::Token) = print(io,"Token($(t.type_), $(t.value))")
 
-new_borrow_pos(type_,value, borrow_t) = Token(type_,value,borrow_t.pos_in_stream,line=borrow_t.line, column=borrow_t.column)
+update(t::Token;type_=nothing,value=nothing) = begin
+    return new_borrow_pos(type_!=nothing ? type_ : t.type_,
+                          value!=nothing ? value : t.value,
+                          t)
+end
+
+new_borrow_pos(type_,value, borrow_t) = Token(type_,borrow_t.pos_in_stream,value,
+                                              borrow_t.line, borrow_t.column,borrow_t.end_line,
+                                              borrow_t.end_column,borrow_t.end_pos)
 
 ## __reduce__ not reproduced; need to check if we need it.
 
@@ -120,6 +155,7 @@ end
 
 LineCounter() = LineCounter('\n',1,1,1,1)
 
+LineCounter(newline_char) = LineCounter(newline_char,1,1,1,1)
 """
 feed
 
@@ -152,51 +188,9 @@ _Lex(lexer;state=nothing) = _Lex(lexer,state)
 
 abstract type Lexer end
 
-# The lex function creates a channel which is iterated over to get the
-# tokens. If state_src is not nothing, it is a channel from which to obtain
-# the next parser state to determine the correct lexer to use.
-#
-# Julia `match` will not anchor to the first character, so in our mre construction
-# we make sure that `^` is the first character to force rapid matching
-#
-lex(l::Lexer,stream::String,newline_types,ignore_types) = Channel() do token_chan
-        newline_types = Set(newline_types)
-        ignore_types = Set(ignore_types)
-
-    line_ctr = LineCounter()
-    sub_lexer = get_lexer(l)  #For contextual lexers
-    while line_ctr.char_pos <= ncodeunits(stream)
-        #println("Now at char pos $(line_ctr.char_pos)")
-        mres,names_by_idx = sub_lexer.mres   #
-        m = Base.match(mres,SubString(stream,line_ctr.char_pos))
-        if m == nothing || m.match == ""
-            throw(UnexpectedCharacters(stream,line_ctr.char_pos, line_ctr.line,
-                                       line_ctr.column))
-        end
-        t = nothing
-        value = m.match
-        match_num = findfirst(v -> v!=nothing,m.captures)
-        type_ = names_by_idx[match_num]
-        #println("Preliminary match: $type_")
-        if !(type_ in ignore_types)
-            t = Token(type_,value,pos_in_stream=line_ctr.char_pos,line=line_ctr.line,column=line_ctr.column)
-            if type_ in keys(sub_lexer.callback)
-                t = sub_lexer.callback[type_](t)
-            end
-            put!(token_chan,t)
-            sub_lexer = get_lexer(l)  #wait for update
-        else
-            if type_ in keys(sub_lexer.callback)
-                t = Token(type_, value, pos_in_stream=line_ctr.char_pos, line=line_ctr.line, column=line_ctr.column)
-                sub_lexer.callback[type_](t)
-            end
-        end
-        feed!(line_ctr,value,test_newline = type_ in newline_types)
-        if t != nothing
-            t.end_line = line_ctr.line
-            t.end_column = line_ctr.column
-        end
-    end
+make_lexer_state(text) = begin
+    line_ctr = LineCounter('\n')
+    return LexerState(text,line_ctr)
 end
 
 # UnlessCallback appears to be a closure?
@@ -221,7 +215,7 @@ unless_callback(mres) = function (t)
     return t
 end
 
-_create_unless(terminals) = begin
+_create_unless(terminals, g_regex_flags) = begin
     tokens_by_type = classify(terminals,key = t->typeof(t.pattern))
     embedded_strs = Set()
     callback = Dict()
@@ -232,7 +226,7 @@ _create_unless(terminals) = begin
                 continue
             end
             s = strtok.pattern.value
-            m = Base.match(Regex(to_regexp(retok.pattern)),s)
+            m = Base.match(Regex(to_regexp(retok.pattern),g_regex_flags),s)
             if m!=nothing && m.match == s
                 push!(unless,strtok)
                 if get_flags(strtok.pattern) <= get_flags(retok.pattern)
@@ -241,18 +235,17 @@ _create_unless(terminals) = begin
             end
         end
         if !isempty(unless)
-            callback[retok.name] = unless_callback(build_mres(unless, match_whole = true))
+            callback[retok.name] = unless_callback(build_mres(unless, g_regex_flags, match_whole = true))
         end
     end
     terminals = [t for t in terminals if !(t in embedded_strs)]
     return terminals, callback
 end
 
-# The python version is convoluted due to the maximum number of groups of 100
-# Don't know yet if this applies to Julia. Match whole means that the regex
+# Match whole means that the regex
 # must match the whole expression e.g. when checking tokens for matches with
 # other things. "\A" forces the match to match at the beginning.
-build_mres(terminals;match_whole=false) = begin
+build_mres(terminals,g_regex_flags;match_whole=false) = begin
     postfix = ")"
     prefix = raw"\A("
     if match_whole
@@ -261,7 +254,7 @@ build_mres(terminals;match_whole=false) = begin
     end
     prep_string = join(["(?P<$(t.name)>$(prefix*to_regexp(t.pattern)*postfix))" for t in terminals],"|")
     #println("String for regex: $prep_string")
-    mres = Regex(prep_string)
+    mres = Regex(prep_string,g_regex_flags)
     names_by_idx = Base.PCRE.capture_names(mres.regex)
     #println("All regexes now $mres")
     return mres,names_by_idx
@@ -269,112 +262,189 @@ end
 
 _regexp_has_newline(r) = begin
     return occursin("\n", r) || occursin("\\n", r) || occursin("[^", r) ||
-        (occursin("(?s", r) && occursin('.', r))
+         occursin("\\s",r) || (occursin("(?s", r) && occursin('.', r))
 end
 
 
 struct TraditionalLexer <: Lexer
     newline_types::Array{String}
-    ignore_types::Array{String}
+    ignore_types::Set{String}
     callback::Dict{String,Function}
     terminals::Array{TerminalDef}
     mres::Tuple{Regex,Dict{Int,String}}
 end
 
-TraditionalLexer(terminals;ignore=(),user_callbacks=Dict()) = begin
-    for t in terminals
-        try
-            Regex(to_regexp(t.pattern))
-        catch
-            throw(LexError("Cannot compile token $(t.name): $(t.pattern)"))
+TraditionalLexer(conf) = begin
+    terminals = collect(conf.tokens)
+    @assert all(x-> x isa TerminalDef,terminals)
+    if !conf.skip_validation 
+        for t in terminals
+            try
+                Regex(to_regexp(t.pattern),conf.g_regex_flags)
+            catch
+                throw(LexError("Cannot compile token $(t.name): $(t.pattern)"))
+            end
+            if min_width(t.pattern) == 0
+                throw(LexError("Lexer does not allow zero-width terminals. ($(t.name): $(t.pattern))"))
+            end
         end
-        if min_width(t.pattern) == 0
-            throw(LexError("Lexer does not allow zero-width terminals. ($(t.name): $(t.pattern))"))
-        end
+        @assert Set(conf.ignore) <= Set([t.name for t in terminals])
     end
-    @assert Set(ignore) <= Set([t.name for t in terminals])
-    
     newline_types = [t.name for t in terminals if _regexp_has_newline(to_regexp(t.pattern))]
+    ignore_types = Set(conf.ignore)
     sort!(terminals, by= x -> (-x.priority, -max_width(x.pattern),-length(x.pattern.value),x.name))
-    terminals, callback = _create_unless(terminals)
-    for (type_,f) in user_callbacks
-        @assert !(type_ in collect(keys(callback)))
+    # _build called instead in Lark 0.11.1
+    temp_terminals, callback = _create_unless(terminals,conf.g_regex_flags)
+    for (type_,f) in conf.callbacks
+        @assert !(type_ in keys(callback)) "TODO: add call chain" #Lark has CallChain here
         callback[type_] = f
     end
-    TraditionalLexer(newline_types,ignore,callback,terminals,build_mres(terminals))
+    TraditionalLexer(newline_types,ignore_types,callback,terminals,build_mres(temp_terminals,conf.g_regex_flags))
 end
 
-lex(tl::TraditionalLexer,stream::String) = begin
-    lex(tl,stream,tl.newline_types,tl.ignore_types)
+match(tl::TraditionalLexer,text,pos) = begin
+    m = Base.match(tl.mres[1],SubString(text,pos))
+    if !(m===nothing)
+        match_num = findfirst(v -> v!=nothing,m.captures)
+        return m.match, tl.mres[2][match_num]
+    end
 end
 
-mutable struct ContextualLexer <: Lexer
+next_token(tl::TraditionalLexer,lex_state,dummy) = begin
+    line_ctr = lex_state.line_ctr
+    while line_ctr.char_pos < length(lex_state.text)
+        res = match(tl,lex_state.text,line_ctr.char_pos)
+        if res === nothing
+            allowed = Set(values(tl.mres[2])) - tl.ignore_types
+            if length(allowed) == 0
+                allowed = Set(["<END-OF-FILE>"])
+            end
+            throw(UnexpectedCharacters(lex_state.text,line_ctr.char_pos,line_ctr.line,line_ctr.column,allowed=allowed,token_history=lex_state.last_token && [lex_state.last_token]))
+        end
+        value,type_ = res
+        if !(type_ in tl.ignore_types)
+            t = Token(type_,value,pos_in_stream=line_ctr.char_pos,line=line_ctr.line,column=line_ctr.column)
+            feed!(line_ctr,value, test_newline=type_ in tl.newline_types)
+            t.end_line = line_ctr.line
+            t.end_column = line_ctr.column
+            t.end_pos = line_ctr.char_pos
+            if type_ in keys(tl.callback)
+                t = tl.callback[type_](t)
+                if !(t isa Token) throw(error("Callbacks must return a token (returned $t)")) end
+            end
+            lex_state.last_token = t
+            return t
+        else
+            if type_ in keys(tl.callback)
+                t2 = Token(type_, value, pos_in_stream=line_ctr.char_pos, line=line_ctr.line, column=line_ctr.column)
+                tl.callback[type_](t2)
+            end
+            feed!(line_ctr,value,test_newline=type_ in tl.newline_types)
+        end
+    end
+    throw(EOFError())
+end
+
+include("common.jl")   #definitions for LexerConf and ParserConf
+
+mutable struct LexerState
+    text::String
+    line_ctr::LineCounter
+    last_token::Union{Token,Nothing}
+end
+
+LexerState(text,line_ctr;last_token=nothing) = begin
+    LexerState(text,line_ctr,last_token)
+end
+
+struct ContextualLexer <: Lexer
     lexers::Dict{Any,TraditionalLexer}
     root_lexer::TraditionalLexer
-    parser_state
-    state_source::Channel
 end
 
-ContextualLexer(terminals,states,state_channel;ignore=(),always_accept=(),user_callbacks=Dict()) = begin
+ContextualLexer(conf::LexerConf,states;always_accept=()) = begin
+    terminals = collect(conf.tokens)
     tokens_by_name = Dict()
     for t in terminals
-        @assert !(t.name in collect(keys(tokens_by_name))) 
+        @assert !(t.name in keys(tokens_by_name)) 
         tokens_by_name[t.name] = t
     end
 
+    trad_conf = copy(conf)
+    trad_conf.tokens = terminals
     lexer_by_tokens = Dict()
     lexers = Dict()
-    lexer = missing  #define in scope
+    lexer = missing  #define in outer scope
     for (state,accepts) in states
         #println("State $state accepts $accepts")
         key = Set(accepts)
         try
             lexer = lexer_by_tokens[key]
         catch KeyError
-            accepts = union( Set(accepts), ignore, always_accept)
+            accepts = union( Set(accepts), conf.ignore, always_accept)
             state_tokens = [tokens_by_name[n] for n in accepts if (n != nothing && n in keys(tokens_by_name))]
-            lexer = TraditionalLexer(state_tokens, ignore=ignore, user_callbacks=user_callbacks)
+            lexer_conf = copy(trad_conf)
+            lexer_conf.tokens = state_tokens
+            lexer = TraditionalLexer(lexer_conf)
             lexer_by_tokens[key] = lexer
             #println("Added lexer that accepts $key")
         end
         lexers[state] = lexer
     end
-    root_lexer = TraditionalLexer(terminals,ignore=ignore,user_callbacks=user_callbacks)
-    ContextualLexer(lexers,root_lexer,nothing,state_channel)
+    @assert trad_conf.tokens == terminals
+    root_lexer = TraditionalLexer(trad_conf)
+    ContextualLexer(lexers,root_lexer)
 end
 
-# This is a method in Python designed to capture the lexer it belongs to
-# in a closure, so the lexer doesn't have to be followed explicitly within
-# the parser
+# Was lex
+next_token(cl::ContextualLexer,lexer_state,parser_state) = begin
+    try
+        lexer = cl.lexers[position(parser_state)]
+        return next_token(lexer,lexer_state)
+    catch e
+        if e isa EOFError
+            return nothing
+        elseif e isa UnexpectedCharacters
+            token = next_token(cl.root_lexer,lexer_state)
+            throw(UnexpectedToken(token,e.allowed,state=position(parser_state)))
+        end
+    end
+end
+
+struct LexerThread
+    lexer::Lexer
+    state::LexerState
+end
+
+LexerThread(lexer,text::String) = LexerThread(lexer,make_lexer_state(text))
+
+lex(l::LexerThread,parser_state) = l.lexer.lex(l.state,parser_state)
+
+### Not in Lark: an iterator-based approach
 #==
-set_parser_state!(cl::ContextualLexer,state_src) = begin
-    tt = time()
-    new_state = take!(state_src)
-    println("$tt: Set lexer parser state to $state")
-end
+The parser state is passed in to the constructor. It would have been
+created by the parser, and the current state is altered by the
+parser externally.
 ==#
-get_lexer(l::Lexer) = l
-
-get_lexer(cl::ContextualLexer) = begin
-    tt = time()
-    #println("$tt: waiting for state change")
-    #flush(stdout)
-    new_state = take!(cl.state_source)
-    tt = time()
-    #println("$tt: Set lexer parser state to $new_state")
-    return cl.lexers[new_state]
+struct LexerParser
+    lexer::Lexer
+    lexer_state::LexerState
+    parser_state
 end
 
-set_lexer_state(l::Lexer,state) = nothing
-
-set_lexer_state(l::ContextualLexer,state) = begin
-    tt = time()
-    #println("$tt: Send off state change to $state")
-    put!(l.state_source,state)
+LexerParser(lexer::Lexer,text::AbstractString,ps) = begin
+    LexerParser(lexer,make_lexer_state(text),ps)
 end
 
-get_channel(l::Lexer) = nothing
-get_channel(l::ContextualLexer) = l.state_source
+LexerParser(lt::LexerThread,ps) = begin
+    LexerParser(lt.lexer,lt.state,ps)
+end
 
+Base.iterate(l::LexerParser) = begin
+    return (next_token(l.lexer,l.lexer_state,l.parser_state),0)
+end
 
-lex(cl::ContextualLexer,stream) = lex(cl,stream,cl.root_lexer.newline_types,cl.root_lexer.ignore_types)
+Base.iterate(l::LexerParser,dummy) = begin
+    return (next_token(l.lexer,l.lexer_state,l.parser_state),0)
+end
+

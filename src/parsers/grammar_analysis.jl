@@ -36,6 +36,12 @@ Base.show(io::IO,r::RulePtr) = begin
     print(io,"<$(r.rule.origin.name) : $(join(before," ")) * $(join(after," "))>")
 end
 
+# For sorted displays
+Base.isless(rp1::RulePtr,rp2::RulePtr) = begin
+    rp1.rule.origin.name < rp2.rule.origin.name ||
+        rp1.rule.origin.name == rp2.rule.origin.name && rp1.index < rp2.index
+end
+
 next(r::RulePtr) = r.rule.expansion[r.index+1]
 
 advance(r::RulePtr,sym) = begin
@@ -49,8 +55,28 @@ is_satisfied(r::RulePtr) = r.index == length(r.rule.expansion)
 Base.isequal(r1::RulePtr,r2::RulePtr) = r1.rule == r2.rule && r1.index == r2.index
 Base.hash(r1::RulePtr,h::UInt64) = hash(r1.rule,hash(r1.index,h))
 
+# state generation ensures no duplicate LR0ItemSets
+struct LR0ItemSet
+    kernel::Set{RulePtr}
+    closure::Set{RulePtr}
+    transitions::Dict
+    lookaheads::DefaultDict
+end
+
+LR0ItemSet(kernel,closure) = LR0ItemSet(Set(kernel),Set(closure),Dict(),DefaultDict{Any,Set}())
+
+Base.show(io::IO,l::LR0ItemSet) = begin
+    joinstr = ", "
+    println(io,"{$(join(l.kernel,joinstr)) | $(join(l.closure,joinstr))}")
+end
+
+# For displaying sorted lists of states
+Base.isless(lr1::LR0ItemSet,lr2::LR0ItemSet) = begin
+    first(sort(collect(lr1.kernel))) < first(sort(collect(lr2.kernel)))
+end
+
 update_set(set1,set2) = begin
-    if isempty(set2)
+    if isempty(set2) || length(set1) > length(set2)
         return false
     end
     old_len = length(set1)
@@ -100,7 +126,7 @@ calculate_sets(rules) = begin
                     if update_set(FIRST[rule.origin],FIRST[sym])
                         changed = true
                     end
-                end
+                elseif i > 1 break end
             end
         end
     end
@@ -146,9 +172,15 @@ abstract type GrammarAnalyzer end
 
 init_analyser!(g::GrammarAnalyzer,parser_conf;debug=false) = begin
     g.debug = debug
-    rules = push!(parser_conf.rules, Rule(NonTerminal("\$root"), [NonTerminal(parser_conf.start), Terminal("\$END")]))
+    root_rules = Dict([start => Rule(NonTerminal("\$root_" * start), [NonTerminal(start), Terminal("\$END")]) for start in parser_conf.start])
+    rules = vcat(parser_conf.rules, collect(values(root_rules)))
     g.rules_by_origin = classify(rules, key = r -> r.origin)
-    @assert length(rules) == length(Set(rules))
+
+    if length(rules) != length(Set(rules))
+        duplicates = filter(x->count(y->x==y,rules)>1,rules)
+        throw(GrammarError("Rules defined twice: $duplicates"))
+    end
+    
     for r in rules
         for sym in r.expansion
             if !(is_terminal(sym) || sym in keys(g.rules_by_origin))
@@ -156,18 +188,33 @@ init_analyser!(g::GrammarAnalyzer,parser_conf;debug=false) = begin
             end
         end
     end
-    g.start_state = expand_rule(g,NonTerminal("\$root"))
+
+    g.start_states = Dict([start=>expand_rule(g,root_rule.origin) for (start,root_rule) in root_rules])
+    g.end_states = Dict([start=>Set([RulePtr(root_rule,length(root_rule.expansion))]) for (start,root_rule) in root_rules])
+    lr0_root_rules = Dict([start=>Rule(NonTerminal("\$root_" * start),[NonTerminal(start)])
+                           for start in parser_conf.start])
+    lr0_rules = vcat(parser_conf.rules,collect(values(lr0_root_rules)))
+    @assert length(lr0_rules) == length(unique(lr0_rules))
+    g.lr0_rules_by_origin = classify(lr0_rules,key=r->r.origin)
+
+    # Cache RulePtr(r,0) in r (no duplicate RulePtr objects)
+    g.lr0_start_states = Dict([start=>LR0ItemSet([RulePtr(root_rule,0)],expand_rule(g,root_rule.origin,g.lr0_rules_by_origin))
+                               for (start,root_rule) in lr0_root_rules])
     g.FIRST, g.FOLLOW, g.NULLABLE = calculate_sets(rules)
     return g
 end
 
-"""Returns all init_ptrs accessible by rule (recursive)"""
-expand_rule(g::GrammarAnalyzer,rule) = begin
+"""Returns all init_ptrs accessible by source_rule (recursive)"""
+expand_rule(g::GrammarAnalyzer,source_rule, rules_by_origin=nothing) = begin
+    if rules_by_origin === nothing
+        rules_by_origin = g.rules_by_origin
+    end
+    
     init_ptrs = Set{RulePtr}()
     _expand_rule(_rule) = begin
         Channel() do rule_chan
             #@assert !_rule.is_term _rule
-            for r in g.rules_by_origin[_rule]
+            for r in rules_by_origin[_rule]
                 init_ptr = RulePtr(r,0)
                 push!(init_ptrs,init_ptr)
 
@@ -183,15 +230,7 @@ expand_rule(g::GrammarAnalyzer,rule) = begin
         end
     end
 
-    _ = collect(bfs([rule], _expand_rule))
+    _ = collect(bfs([source_rule], _expand_rule))
 
     return init_ptrs
-end
-
-_first(g::GrammarAnalyzer,r) = begin
-    if is_terminal(r)
-        return Set(r)
-    else
-        return Set([next(rp) for rp in g.expand_rule(r) if is_terminal(next(rp))])
-    end
 end

@@ -1,6 +1,7 @@
 module Lerche
 
 using DataStructures  #For Stack when parsing
+using Logging         #Because Lark does
 
 export Tree, Token, Interpreter,Transformer, visit_children, visit,transform
 export GrammarError, ParseError, UnexpectedToken, UnexpectedCharacters
@@ -27,7 +28,6 @@ include("visitors.jl")
 include("exceptions.jl")
 include("grammar.jl")
 include("lexer.jl")
-include("common.jl")
 include("parse_tree_builder.jl")
 include("parsers/grammar_analysis.jl")
 include("parsers/lalr_analysis.jl")
@@ -47,7 +47,7 @@ end
 
 # Prepare the Lark EBNF parser
 
-const _lark_grammar = GrammarLoader()
+const _lark_grammar = GrammarLoader(false)
 
 load_grammar(text::String;options...) = load_grammar(_lark_grammar,text;options...)
 

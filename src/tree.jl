@@ -14,7 +14,18 @@ end
 
 # Note that a Python slotted tree is just a tree with
 # restricted possible fields, like a Julia struct.
+"""
+The main tree class.
 
+    Creates a new tree, and stores "data" and "children" in attributes of the same name.
+    Trees can be hashed and compared.
+
+    Parameters:
+        data: The name of the rule or alias
+        children: List of matched sub-rules and terminals
+        meta: Line & Column numbers (if ``propagate_positions`` is enabled).
+            meta attributes: line, column, start_pos, end_line, end_column, end_pos
+"""
 mutable struct Tree
     data
     children

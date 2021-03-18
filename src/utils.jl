@@ -51,6 +51,7 @@ any newly generated elements until
 no new elements are generated. A sequence of elements
 are returned via a channel.
 """
+#TODO: use proper Queue from DataStructures
 bfs(initial,expand) = Channel() do q_chan
     # Python: open_q = deque(list(initial))
     open_q = collect(initial)
@@ -70,6 +71,30 @@ bfs(initial,expand) = Channel() do q_chan
     #println("BFS has finished!!")
 end
 
+# I know there's probably a fancy way to do this in Julia but this
+# is basically a copy of the Python version for now
+raw"""
+    Accepts a list of alternatives, and enumerates all their possible concatinations.
+
+    Examples:
+        >>> combine_alternatives([range(2), [4,5]])
+        [[0, 4], [0, 5], [1, 4], [1, 5]]
+
+        >>> combine_alternatives(["abc", "xy", '$'])
+        [['a', 'x', '$'], ['a', 'y', '$'], ['b', 'x', '$'], ['b', 'y', '$'], ['c', 'x', '$'], ['c', 'y', '$']]
+
+        >>> combine_alternatives([])
+        [[]]
+"""
+combine_alternatives(lists) = begin
+    if isempty(lists)
+        return [[]]
+    end
+    @assert all(l->!isempty(l),lists)
+    init = [[x] for x in lists[1]]
+    return reduce((x,y) -> [vcat(i,j) for i in x for j in y],ll[2:end],init=init)
+end
+
 # The Python version
 # returns (min, max) possible width of matching strings. We only
 # have access to the minimum width through PCRE, so we use that.
@@ -82,7 +107,7 @@ get_regexp_width(regexp) = begin
         r = Regex(regexp)
         minlength = Base.PCRE.info(r.regex,Base.PCRE.INFO_MINLENGTH,Int32)
     catch
-        error("Cannot parse $regexp")
+        throw(error("Cannot parse $regexp as regexp"))
     end
     # A naive guess. Character ranges are not caught, neither are repeats
     if (occursin("+",regexp) && !occursin("\\+",regexp))|| (
@@ -121,6 +146,32 @@ end
 
 partial(f,a...) = (b...) -> return f(a...,b...)
 
+## Defaultdict: initialise with a Type that produces the
+## default value when the key is missing. Mimic use of defaultdict
+## in Lark
+
+struct DefaultDict{K,V} <: AbstractDict{K,V}
+    d::Dict{K,V}
+end
+
+DefaultDict{K,V}() where {K,V} = begin
+    DefaultDict(Dict{K,V}())
+end
+
+Base.getindex(d::DefaultDict{K,V},k) where {K,V} = begin
+    if !haskey(d,k)
+        d.d[k] = V()
+    end
+    return d.d[k]
+end
+
+Base.setindex!(d::DefaultDict,v,k) = d.d[k] = v
+Base.haskey(d::DefaultDict,k) = haskey(d.d,k)
+Base.keys(d::DefaultDict) = keys(d.d)
+Base.values(d::DefaultDict) = values(d.d)
+Base.iterate(d::DefaultDict) = Base.iterate(d.d)
+Base.iterate(d::DefaultDict,s) = Base.iterate(d.d,s)
+Base.length(d::DefaultDict) = Base.length(d.d)
 """
 Flag that the following method is a rule. Usage: @rule rule_name(t::Type,args) = begin .... end.
 There can only be one argument after the type argument, which will be the tree children.

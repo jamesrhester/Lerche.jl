@@ -69,6 +69,25 @@ end
 # it will adopt the type of c[i].children, which may be
 # a subarray and therefore not allow later push! operations.
 
+ChildFilter(to_include,append_none,node_builder) = function(c)
+    filtered = Union{Token,Tree,Nothing}[]
+    for (i,to_expand,add_none) in to_include
+        if add_none > 0
+            append!(filtered,fill(nothing,add_none))
+        end
+        if to_expand
+            append!(filtered,c[i].children)
+        else
+            push!(filtered,c[i])
+        end
+    end
+
+    if append_none > 0
+        append!(filtered,fill(nothing,append_none))
+    end
+    node_builder(filtered)
+end
+
 ChildFilterLALR(to_include,node_builder) = function(c)
     #println("Filtering children: $to_include")
     filtered = Union{Token,Tree}[]
@@ -81,21 +100,58 @@ ChildFilterLALR(to_include,node_builder) = function(c)
     end
     return node_builder(filtered)
 end
-    
+
+ChildFilterLALR_NoPlaceholders(to_include,node_builder) = function(c)
+    filtered = Union{Token,Tree}[]
+    for (i, to_expand) in to_include
+        if to_expand
+            if length(filtered) > 0
+                append!(filtered,c[i].children)
+            else
+                filtered = c[i].children
+            end
+        else
+            push!(filtered,c[i])
+        end
+    end
+    return node_builder(filtered)
+end
+
 _should_expand(sym) = !is_terminal(sym) && first(sym.name) == '_'
 
-maybe_create_child_filter(expansion,keep_all_tokens) = begin
-    to_include = [(i,_should_expand(sym)) for (i,sym) in enumerate(expansion)
-                  if keep_all_tokens || !(is_terminal(sym) && sym.filter_out)]
-    if length(to_include) < length(expansion) || any([to_expand for (i,to_expand) in to_include])
-        return partial(ChildFilterLALR,to_include)
+# TODO: possible bug from 0-indexing in python going to 1-indexing in Julia
+maybe_create_child_filter(expansion,keep_all_tokens,ambiguous,_empty_indices) = begin
+    if _empty_indices !== nothing
+        @assert count(x->!x,_empty_indices) == length(expansion)
+        s = join([x-> x ? "1" : "0" , _empty_indices],"")
+        empty_indices = [length(ones) for ones in split(s,"0")]
+        @assert length(empty_indices) == length(expansion) + 1
     else
-        false
+        empty_indices = fill(0,length(expansion)+1)
     end
+    to_include = []
+    nones_to_add = 0
+    for (i,sym) in enumerate(expansion)
+        nones_to_add += empty_indices[i]
+        if keep_all_tokens || !(is_terminal(sym) && sym.filter_out)
+            push!(to_include, (i,_should_expand(sym), nones_to_add))
+            nones_to_add = 0
+        end
+    end
+    nones_to_add += empty_indices[length(expansion)+1]
+
+    if _empty_indices !== nothing || length(to_include) < length(expansion) || any([to_expand for (i,to_expand) in to_include])
+        if _empty_indices !== nothing || ambiguous
+            return partial(ambiguous ? ChildFilter : ChildFilterLALR, to_include, nones_to_add)
+        else
+            return partial(ChildFilterLALR_NoPlaceholders, [(i,x) for (i,x,_) in to_include])
+        end
+    end
+    return false
 end
 
 AmbiguousExpander(to_expand,node_builder) = function(children)
-    _is_ambig_tree(child) = hasproperty(child,:data) && child.data == "_ambig"
+    _is_ambig_tree(t) = hasproperty(t,:data) && t.data == "_ambig"
     ambiguous = [i for i in to_expand if _is_ambig_tree(children[i])]
     if !isempty(ambiguous)
         expand = map(enumerate(children)) do (i,child)
@@ -117,6 +173,87 @@ maybe_create_ambiguous_expander(expansion,keep_all_tokens) = begin
     end
 end
 
+"""
+    Propagate ambiguous intermediate nodes and their derivations up to the
+    current rule.
+
+    In general, converts
+
+    rule
+      _iambig
+        _inter
+          someChildren1
+          ...
+        _inter
+          someChildren2
+          ...
+      someChildren3
+      ...
+
+    to
+
+    _ambig
+      rule
+        someChildren1
+        ...
+        someChildren3
+        ...
+      rule
+        someChildren2
+        ...
+        someChildren3
+        ...
+      rule
+        childrenFromNestedIambigs
+        ...
+        someChildren3
+        ...
+      ...
+
+    propagating up any nested '_iambig' nodes along the way.
+    """
+AmbiguousIntermediateExpander(node_builder,children) = begin
+    _is_iambig_tree(child) = begin
+        return hasproperty(child, :data) && child.data == "_iambig"
+    end
+    
+    _collapse_iambig(children) = begin
+        #==
+            Recursively flatten the derivations of the parent of an '_iambig'
+            node. Returns a list of '_inter' nodes guaranteed not
+            to contain any nested '_iambig' nodes, or None if children does
+            not contain an '_iambig' node.
+        ==#
+
+        # Due to the structure of the SPPF,
+        # an '_iambig' node can only appear as the first child
+        if !isempty(children) && _is_iambig_tree(children[1])
+            iambig_node = children[1]
+            result = []
+            for grandchild in iambig_node.children
+                collapsed = _collapse_iambig(grandchild.children)
+                if !isempty(collapsed)
+                    for child in collapsed
+                        append!(child.children, children[2:end])
+                        append!(result, collapsed)
+                    end
+                else
+                    new_tree = Tree("_inter", append!(copy(grandchild.children), children[2:end]))
+                    push!(result,new_tree)
+                end
+            end
+            return result
+        end
+    end
+    
+    collapsed = _collapse_iambig(children)
+    if !isempty(collapsed)
+        processed_nodes = [node_builder(c.children) for c in collapsed]
+        return Tree("_ambig", processed_nodes)
+    end
+    return node_builder(children)
+end
+
 abstract type Callback end
 
 # No need for the @wrap decorator from Python as that is just
@@ -125,16 +262,21 @@ ptb_inline_args(func) = begin
     return children -> func(children...)
     end
 
+inplace_transformer(func) = begin
+    return children -> func(Tree(Symbol(func),children))
+end
+
+apply_visit_wrapper(func,name,wrapper) = begin
+    return children -> wrapper(func,name,children,nothing)
+end
+
 struct ParseTreeBuilder
-    propagate_positions::Bool
-    always_keep_all_tokens::Bool
-    ambiguous::Bool
     rule_builders::Array{Tuple{Rule,Array{Function}},1}
 end
 
-ParseTreeBuilder(rules;propagate_positions=false,keep_all_tokens=false,ambiguous=false)= begin
-    rule_builders = collect(_init_builders(rules,keep_all_tokens,ambiguous,propagate_positions))
-    ParseTreeBuilder(propagate_positions,keep_all_tokens,ambiguous,rule_builders)
+ParseTreeBuilder(rules::Array{Rule,1};propagate_positions=false,ambiguous=false,maybe_placeholders=false)= begin
+    rule_builders = collect(_init_builders(rules,ambiguous,propagate_positions,maybe_placeholders))
+    ParseTreeBuilder(rule_builders)
 end
 
 # The wrapper chain provides a set of operations to perform based on options, very compact
@@ -142,22 +284,21 @@ end
 ## Note the Python behaviour of 'and' and 'or'; they return the most recent argument
 # that has been evaluated
 
-_init_builders(rules,all_tokens,ambiguous,propagate_positions) = Channel() do buildchan
+_init_builders(rules,ambiguous,propagate_positions,maybe_placeholders) = Channel() do buildchan
     for rule in rules
         options = rule.options
-        keep_all_tokens = all_tokens || (if options != nothing 
-                                         options.keep_all_tokens
-                                         else false end)
-        expand_single_child = if options != nothing options.expand1 else false end
+        keep_all_tokens = options.keep_all_tokens
+        expand_single_child = options.expand1
         wrapper_chain =
             filter(x-> typeof(x) != Bool, [
-                if propagate_positions PropagatePositions else false end,
                 if (expand_single_child && rule.alias == nothing) ExpandSingleChild else false end,
-                maybe_create_child_filter(rule.expansion, keep_all_tokens),
+                maybe_create_child_filter(rule.expansion, keep_all_tokens, ambiguous, maybe_placeholders ? options.empty_indices : nothing),
+                if propagate_positions PropagatePositions else false end,
                 if ambiguous
                 maybe_create_ambiguous_expander(rule.expansion,keep_all_tokens)
                 else false
-                end
+                end,
+                if ambiguous AmbiguousIntermediateExpander else false end
             ])
         put!(buildchan, (rule,wrapper_chain))
     end
@@ -174,16 +315,17 @@ end
 # We have to supply a dummy "nothing" argument for meta.
 
 create_callback(ptb::ParseTreeBuilder;transformer=nothing) = begin
-    callback = Dict()
+    callbacks = Dict()
     i = 0
     for (rule,wrapper_chain) in ptb.rule_builders
         #println("Rule: $(rule.origin)")
-        internal_callback_name = "_cb$(i)_$(rule.origin)"
-        i = i+1
         # Now find the actual transformer function ...
         user_callback_name = if rule.alias != nothing rule.alias else rule.origin.name end
         f = partial(transformer_func,transformer,Val{Symbol(user_callback_name)}(),Meta())
-        rule.alias = internal_callback_name  #remember how to call it
+        if typeof(transformer) <: Transformer_InPlace
+            f = inplace_transformer(f)
+        end
+        
         for w in wrapper_chain
             if w == nothing
                 println("Rule $rule has a nothing in the wrapper!!")
@@ -191,10 +333,10 @@ create_callback(ptb::ParseTreeBuilder;transformer=nothing) = begin
             end
             f = w(f)  #ExpandSingleChild, maybe_create_child_filter,propagate positions
         end
-        if internal_callback_name in collect(keys(callback))
-            error("Rule '$rule' already exists")
+        if rule in keys(callbacks)
+            throw(GrammarError("Rule '$rule' already exists"))
         end
-        callback[internal_callback_name]=f
+        callbacks[rule]=f
     end
-    return callback
+    return callbacks
 end

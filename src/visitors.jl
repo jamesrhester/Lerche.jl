@@ -1,11 +1,31 @@
-"""Visits the tree recursively, starting with the leaves and finally the root (bottom-up)
+"""Transformers visit each node of the tree, and run the appropriate method on it according to the node's data.
 
-    Calls its methods (provided by user) according to tree.data
+    The methods (provided by the user) are dispatched according to the type and ``tree.data``.
     The returned value replaces the old one in the structure.
 
-    Can be used to implement map or reduce.
+    They work bottom-up (or depth-first), starting with the leaves and ending at the root of the tree.
+    Transformers can be used to implement map & reduce patterns. Because nodes are reduced from leaf to root,
+    at any point the callbacks may assume the children have already been transformed (if applicable).
+
+    ``Transformer`` can do anything ``Visitor`` can do, but because it reconstructs the tree,
+    it is slightly less efficient. It can be used to implement map or reduce patterns.
+
+    All these classes implement the transformer interface:
+
+    - ``Transformer`` - Recursively transforms the tree. This is the one you probably want.
+    - ``Transformer_InPlace`` - Non-recursive. Changes the tree in-place instead of returning new instances
+    - ``Transformer_InPlaceRecursive`` - Recursive. Changes the tree in-place instead of returning new instances
+
+Traits: 
+        visit_tokens (::Transformer) = true: Should the transformer visit tokens in addition to rules.
+                                       Setting this to ``False`` is slightly faster. Defaults to ``True``.
+                                       (For processing ignored tokens, use the ``lexer_callbacks`` options)
+
+    NOTE: A transformer without methods essentially performs a non-memoized deepcopy.
 """
 abstract type Transformer end
+
+visit_tokens(t::Transformer) = true
 
 #== Python decorator 
 
@@ -69,6 +89,16 @@ end
 
 transformer_func(::Nothing,::Val{N},::Meta,children) where N = Tree(String(N),children)
 
+"""
+A token transformer function, works like the tree transformer
+"""
+function token_func end
+
+# default
+token_func(t::Transformer,::Val{N},tok) where N = begin
+    return tok
+end
+
 # Note that `new_children` replaces `tr.children` as the idea is that they
 # have been processed if they are provided as an argument
 _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
@@ -80,6 +110,10 @@ _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
     return transformer_func(t,Val{Symbol(tr.data)}(),tr._meta,children)
 end
 
+_call_userfunc_token(t::Transformer,token) = begin
+    return token_func(t,Val{Symbol(token)},token)
+end
+
 # No need for a channel here as we just collect the results anyway.
 # We annotate the return type as otherwise Julia will assume the type
 # is the type of the first returned value.
@@ -88,6 +122,8 @@ _transform_children(t::Transformer,children)::Array{Any} = begin
         try
             if c isa Tree
                 _transform_tree(t,c)
+            elseif visit_tokens(t) && c isa Token
+                _call_userfunc_token(t,c)
             else
                 c
             end
@@ -159,6 +195,37 @@ transform(tip::Transformer_InPlace, tree) = begin
     return _transform_tree(tip,tree)
 end
 
+abstract type Transformer_NonRecursive <: Transformer end
+
+transform(tnr::Transformer_NonRecursive, tree) = begin
+    rev_postfix = []
+    q = [tree]
+    while !isempty(q)
+        t = pop!(q)
+        push!(rev_postfix,t)
+        if t isa Tree
+            append!(q,t.children)
+        end
+    end
+    stack = []
+    for x in reverse(rev_postfix)
+        if x isa Tree
+            size = length(x.children)
+            if size > 0
+                args = stack[end-size+1:end]
+                stack = stack[1:end-size]
+            else
+                args = []
+            end
+            push!(stack,_call_userfunc(x,args))
+        else
+            push!(stack,x)
+        end
+    end
+    t = stack[]
+    return t
+end
+
 #== Visitors ==#
 
 abstract type VisitorBase end
@@ -177,13 +244,30 @@ visit(v::Visitor,tree) = begin
     return tree
 end
 
+visit_topdown(v::Visitor,tree) = begin
+    for subtree in iter_subtrees_topdown(tree)
+        _call_userfunc(v,subtree)
+    end
+    return tree
+end
+
 visit(v::Visitor_Recursive,tree) = begin
     for child in tree.children
         if child isa Tree
             visit(v,child)
         end
     end
-    transformer_func(v,tree)
+    _call_userfunc(v,tree)
+    return tree
+end
+
+visit_topdown(v::Visitor_Recursive,tree) = begin
+    _call_userfunc(tree)
+    for child in tree.children
+        if child isa Tree
+            visit_topdown(v,child)
+        end
+    end
     return tree
 end
 
@@ -211,3 +295,14 @@ visit_children(inter::Interpreter,tree) = begin
         end
     end
 end
+
+abstract type CollapseAmbiguities <: Transformer end
+
+@rule _ambig(c::CollapseAmbiguities,options) = sum(options,[])
+
+__default__(c::CollapseAmbiguities,data,children_lists,meta) = begin
+    [Tree(data,children,meta) for children in combine_alternatives(children_lists)]
+end
+
+__default_token__(c::CollapseAmbiguities,t) = [t]
+    

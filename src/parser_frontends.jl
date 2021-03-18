@@ -1,11 +1,110 @@
 # TODO: use parametric types with the type parameters corresponding
 # to the lexer and parser
 
-abstract type WithLexer end
+get_frontend(parser,lexer) = begin
+    if parser=="lalr"
+        if lexer === nothing
+            throw(error("The LALR parser requires use of a lexer"))
+        elseif lexer == "standard"
+            return LALR_TraditionalLexer
+        elseif lexer == "contextual"
+            return LALR_ContextualLexer
+        else
+            throw(error("Unknown lexer: $lexer"))
+        end
+    else
+        throw(error("Unknown parser: $parser"))
+    end
+end
 
-init_traditional_lexer(p::WithLexer,lexer_conf) = begin
-    p.lexer_conf = lexer_conf
-    p.lexer = TraditionalLexer(lexer_conf.tokens,ignore=lexer_conf.ignore,user_callbacks=lexer_conf.callbacks)
+#TODO: our transformers are structured differently
+#==
+_get_lexer_callbacks(transformer,terminals) = begin
+    result = Dict()
+    for terminal in terminals
+        callback = getproperty(transformer, Symbol(terminal.name), nothing)
+        if callback != nothing
+            result[terminal.name] = callback
+        end
+    end
+    return result
+end
+==#
+
+struct PostLexConnector
+    lexer
+    postlexer
+end
+
+make_lexer_state(pc::PostLexConnector,text) = make_lexer_state(pc.lexer,text)
+
+# TODO: use an iteration approach
+lex(pc::PostLexConnector,lexer_state,parser_state) = begin
+    i = lex(pc.lexer,lexer_state,parser_state)
+    return process(pc.postlexer,i)
+end
+
+abstract type _ParserFrontend end
+abstract type WithLexer <: _ParserFrontend end
+
+_parse(pf::_ParserFrontend,start,input,args...) = begin
+    if start === nothing
+        start = pf.start
+        if length(start) > 1
+            throw(error("Lark initialized with more than 1 possible start rule. Must specify which start rule to parse: $start"))
+        end
+        start = start[]
+    end
+    parse(pf.parser,input, start,args...)
+end
+
+make_lexer(wl::WithLexer,text) = begin
+    lexer = wl.lexer
+    if wl.postlex != nothing
+        lexer = PostLexConnector(wl.lexer,wl.postlex)
+    end
+    return LexerThread(lexer,text)
+end
+
+parse(wl::WithLexer,text,start=nothing) = begin
+    _parse(wl,start,make_lexer(wl,text))
+end
+
+abstract type LALR_WithLexer <: WithLexer end
+
+struct LALR_TraditionalLexer <: LALR_WithLexer
+    lexer
+    lexer_conf
+    postlex
+    parser
+    start
+end
+
+LALR_TraditionalLexer(lexer_conf,parser_conf;options=nothing) = begin
+    debug = options !== nothing ? options.debug : false 
+    LALR_TraditionalLexer(TraditionalLexer(lexer_conf), lexer_conf,
+                          lexer_conf.postlex,
+                          LALRParser(parser_conf,debug=debug),
+                          parser_conf.start
+                          )
+end
+
+struct LALR_ContextualLexer <: LALR_WithLexer
+    lexer
+    lexer_conf
+    postlex
+    parser
+    start
+end
+
+LALR_ContextualLexer(lexer_conf,parser_conf;options=nothing) = begin
+    debug = options !== nothing ? options.debug : false 
+    parser = LALRParser(parser_conf,debug=debug)
+    postlex = lexer_conf.postlex
+    states = Dict([idx=>collect(keys(t)) for (idx,t) in parser._parse_table.states])
+    always_accept = postlex !== nothing ? postlex.always_accept : ()
+    lexer = ContextualLexer(lexer_conf,states,always_accept=always_accept)
+    LALR_ContextualLexer(lexer,lexer_conf,postlex,parser,parser_conf.start)
 end
 
 init_contextual_lexer(p::WithLexer,lexer_conf) = begin
@@ -21,84 +120,6 @@ init_contextual_lexer(p::WithLexer,lexer_conf) = begin
                               ignore=lexer_conf.ignore,
                               always_accept=always_accept,
                               user_callbacks=lexer_conf.callbacks)
-end
-
-lex(p::WithLexer,text) = begin
-    stream = lex(p.lexer,text)
-    if p.lexer_conf.postlex != nothing
-        return process(p.lexer_conf.postlex,stream)
-    end
-    return stream
-end
-
-parse(p::WithLexer,text) = begin
-    token_stream = lex(p,text)
-    set_state = partial(set_lexer_state,p.lexer)
-    return parse(p.parser,token_stream,set_state=set_state)
-end
-
-mutable struct LALR_TraditionalLexer <: WithLexer
-    lexer_conf::LexerConf
-    lexer::TraditionalLexer
-    parser::LALRParser
-    LALR_TraditionalLexer(lexer_conf,parser_conf;options=nothing) = begin
-        if !isnothing(options) debug = options["debug"] else debug = false end
-        x = new()
-        x.parser = LALRParser(parser_conf,debug=debug)
-        init_traditional_lexer(x,lexer_conf)
-        return x
-        end
-end
-
-mutable struct LALR_ContextualLexer <: WithLexer
-    lexer_conf
-    lexer
-    parser
-    LALR_ContextualLexer(lexer_conf,parser_conf;options=nothing) = begin
-        if !isnothing(options) debug = options["debug"] else debug = false end
-        x = new()
-        x.parser = LALRParser(parser_conf,debug=debug)
-        init_contextual_lexer(x,lexer_conf)
-        return x
-        end
-end
-
-mutable struct LALR_CustomLexer <: WithLexer
-    lexer_conf
-    lexer
-    parser
-    LALR_CustomLexer(lexer_cls,lexer_conf,parser_conf) = begin
-        x = new()
-        x.parser = LALRParser(parser_conf)
-        x.lexer_conf = lexer_conf
-        x.lexer = lexer_cls(lexer_conf)
-        return x
-        end
-end
-
-get_ambiguity_options(options) = begin
-    if isnothing(options) || options.ambiguity == "resolve"
-        return Dict()
-    elseif options.ambiguity == "resolve__antiscore_sum"
-        return Dict("forest_sum_visitor"=>ForestAntiscoreSumVisitor)
-    elseif options.ambiguity == "explicit"
-        return Dict("resolve_ambiguity":false)
-    end
-    error("Bad value: $options")
-end
-
-# Enumerate here does not enumerate characters; FIXME
-
-tokenize_text(text) = Channel() do token_chan
-    line = 1
-    col_start_pos = 1
-    for (i, ch) in enumerate(text)
-        if '\n' == ch
-            line += count(ch,'\n')
-            col_start_pos = i + rindex(ch,'\n')
-        end
-        put!(token_chan, Token("CHAR", ch, line=line, column=i - col_start_pos))
-    end
 end
 
 # Note we don't have to pass the match method as multiple despatch
@@ -117,49 +138,6 @@ end
 
 match(e::Earley,term,token) = term.name == token.type_
 
-# Other parsers left out for now
-
-get_frontend(parser,lexer) = begin
-        if parser=="lalr"
-            if lexer == nothing
-                error("The LALR parser requires use of a lexer")
-            elseif lexer == "standard"
-                return LALR_TraditionalLexer
-            elseif lexer == "contextual"
-                return LALR_ContextualLexer
-            elseif lexer <: Lexer
-                return LALR_CustomLexer(lexer)  #partial application
-            else
-                error("Unknown lexer: $lexer")
-            end
-            
-        elseif parser=="earley"
-            if lexer=="standard"
-                return Earley
-#==         elseif lexer=="dynamic"
-                return XEarley
-            elseif lexer=="dynamic_complete"
-                return XEarley_CompleteLex   ==#
-            elseif lexer=="contextual"
-                error("The Earley parser does not support the contextual parser")
-            else
-                error("Unknown lexer: $lexer")
-            end
-            
-#==        elseif parser == "cyk"
-            if lexer == "standard"
-                return CYK
-            else
-                error("CYK parser requires using standard parser.")
-            end
-==#            
-        else
-            error("Unknown parser: $parser")
-        end
-end
-
-
-    
 
 
 

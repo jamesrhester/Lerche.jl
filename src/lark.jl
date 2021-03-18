@@ -1,4 +1,23 @@
 
+const _lark_defaults = Dict([
+        "debug"=> false,
+        "keep_all_tokens"=> false,
+        "postlex"=> nothing,
+        "parser"=> "earley",
+        "lexer"=> "auto",
+        "transformer"=> nothing,
+        "start"=> "start",
+        "priority"=> "auto",
+        "ambiguity"=> "auto",
+        "propagate_positions"=> false,
+        "lexer_callbacks"=> Dict(),
+        "maybe_placeholders"=> false,
+        "edit_terminals"=> nothing,
+        "g_regex_flags"=> 0,
+        "import_paths"=> [],
+        "source_path"=> nothing,
+    ])
+
 """
         parser - Decides which parser engine to use, "earley" or "lalr". (Default: "earley")
                  Note: "lalr" requires a lexer
@@ -26,41 +45,65 @@
         propagate_positions - Propagates [line, column, end_line, end_column] attributes into all tree branches.
         lexer_callbacks - Dictionary of callbacks for the lexer. May alter tokens during lexing. Use with caution.
 """
-
-check_options(od) = begin
-    get!(od,"debug",false)
-    get!(od,"keep_all_tokens",false)
-    get!(od,"cache_grammar", false)
-    get!(od,"postlex", nothing)
-    get!(od,"parser", "earley")
-    get!(od,"lexer", "auto")
-    get!(od,"transformer", nothing)
-    get!(od,"start", "start")
-    get!(od,"profile", false)
-    get!(od,"ambiguity", "auto")
-    get!(od,"propagate_positions", false)
-    get!(od,"earley__predict_all", false)
-    get!(od,"lexer_callbacks", Dict())
-
-    if !(od["parser"] in ("earley", "lalr", "cyk", nothing))
-        error("Option error: Parser must be earley, lalr, cyk or nothing")
+struct LarkOptions
+    options_dict::Dict
+    LarkOptions(o::Dict) = begin
+        options = Dict()
+        for (name,default) in _lark_defaults
+            if name in keys(o)
+                value = pop!(o,name)
+                if default isa Bool
+                    value = Bool(value)
+                end
+            else value = default
+            end
+            options[name] = value
+        end
+        if typeof(options["start"]) <: AbstractString
+            options["start"] = [options["start"]]
+        end
+        if !(options["parser"] in ("earley", "lalr", "cyk", nothing))
+            error("Option error: Parser must be earley, lalr, cyk or nothing")
+        end
+        if options["parser"] == "earley" && !(options["transformer"]==nothing)
+            error("Cannot specify an embedded transformer when using the Earley algorithm." *
+                  "Please use your transformer on the resulting parse tree, or use a different algorithm (i.e. lalr)")
+        end
+        new(options)
     end
-    if od["parser"] == "earley" && !(od["transformer"]==nothing)
-        error("Cannot specify an embedded transformer when using the Earley algorithm." *
-              "Please use your transformer on the resulting parse tree, or use a different algorithm (i.e. lalr)")
+end
+
+Base.getproperty(lo::LarkOptions,name::Symbol) = begin
+    pdict = getfield(lo,:options_dict)
+    if String(name) in keys(pdict)
+        pdict[String(name)]
+    else
+        getfield(lo,name)
+    end
+end
+
+Base.setproperty!(lo::LarkOptions,name::Symbol,value) = begin
+    pdict = getfield(lo,:options_dict)
+    if String(name) in keys(pdict)
+        pdict[String(name)] = value
+    else
+        throw(KeyError(name))
     end
 end
 
 struct Lark
-    options::Dict
-    source
-    grammar
+    options::LarkOptions
+    source_path
+    source_grammar
     terminals
     rules
     ignore_tokens
     lexer_conf
     parser
 end
+
+const VALID_PRIORITY_OPTIONS = ("auto", "normal", "invert", nothing)
+const VALID_AMBIGUITY_OPTIONS = ("auto", "resolve", "explicit", "forest")
 
 Lark(grammar::IOStream;options...) = begin
     source = grammar.name
@@ -75,44 +118,77 @@ Lark(grammar::String;options...) = begin
     Lark(grammar,Dict{String,Any}((String(k),v) for (k,v) in options),source,cache_file)
 end
 
-Lark(grammar::String,options,source,cache_file) = begin
-    if isempty(options)
-        options = Dict{String,Any}()
-    end
-    check_options(options)
-    if options["lexer"] == "auto"
-        if options["parser"] == "lalr"
-            options["lexer"] = "contextual"
-        elseif options["parser"] == "earley"
-            options["lexer"] = "dynamic"
-        elseif options["parser"] == "cyk"
-            options["lexer"] = "standard"
+Lark(grammar::String,loptions,source,cache_file) = begin
+    options = LarkOptions(loptions)
+    if options.lexer == "auto"
+        if options.parser == "lalr"
+            options.lexer = "contextual"
+        elseif options.parser == "earley"
+            options.lexer = "dynamic"
+        elseif options.parser == "cyk"
+            options.lexer = "standard"
         else
-            @assert !options["parser"]
+            @assert !options.parser
         end
     end
     
-    lexer = options["lexer"]
+    lexer = options.lexer
     @assert lexer in ("standard", "contextual", "dynamic", "dynamic_complete") || (lexer isa Lexer)
     
-    if options["ambiguity"] == "auto"
-        if options["parser"] == "earley"
-            options["ambiguity"] = "resolve"
+    if options.ambiguity == "auto"
+        if options.parser == "earley"
+            options.ambiguity = "resolve"
         end
     else
         disambig_parsers = ["earley", "cyk"]
-        @assert (options["parser"] in disambig_parsers) 
+        @assert (options.parser in disambig_parsers) 
         "Only $(join(", ",disambig_parser)) supports disambiguation right now"
     end
-    @assert options["ambiguity"] in ("resolve", "explicit", "auto", "resolve__antiscore_sum")
+
+    if !(options.priority in VALID_PRIORITY_OPTIONS)
+        throw(ValueError("invalid priority option: $(options.priority). Must be one of $VALID_PRIORITY_OPTIONS"))
+    end
+
+    if !(options.ambiguity in VALID_AMBIGUITY_OPTIONS)
+        throw(ValueError("invalid ambiguity option: $(options.ambiguity). Must be one of $VALID_AMBIGUITY_OPTIONS"))
+    end
+
+    grammar = load_grammar(grammar, source, options.import_paths, options.keep_all_tokens)
     
-    grammar = load_grammar(grammar, grammar_name=source)
+    if options.postlex !== nothing
+        terminals_to_keep = Set(options.postlex.always_accept)
+    else
+        terminals_to_keep = Set()
+    end
     
     # Compile the EBNF grammar into BNF
     try
-        terminals, rules, ignore_tokens = compile(grammar)
-        lexer_conf = LexerConf(terminals,ignore_tokens,options["postlex"],options["lexer_callbacks"])
-        if options["parser"] != nothing
+        terminals, rules, ignore_tokens = compile(grammar,options.start,terminals_to_keep)
+        if options.edit_terminals
+            for t in terminals
+                options.edit_terminals(t)
+            end
+        end
+        _terminals_dict = Dict([(t.name => t) for t in terminals])
+
+        if options.priority == "invert"
+            for rule in rules
+                if rule.options.priority != nothing
+                    rule.options.priority = -rule.options.priority
+                end
+            end
+        elseif options.priority ===  nothing
+            for rule in rules
+                if rule.options.priority !== nothing
+                    rule.options.priority = nothing
+                end
+            end
+        end
+        lexer_callbacks = options.transformer ? _get_lexer_callbacks(options.transformer,terminals) : Dict()
+        merge!(lexer_callbacks,options.lexer_callbacks)
+        lexer_conf = LexerConf(terminals,ignore_tokens,options.postlex,lexer_callbacks,options.g_regex_flags)
+        ## Note that lexer is not preserved so will do nothing.
+        if options.parser !== nothing
             parser = _build_parser(options,rules,lexer_conf)
         elseif lexer != nothing
             lexer = TraditionalLexer(lexer_conf.tokens,lexer_conf.ignore,lexer_conf.callbacks)
@@ -127,14 +203,22 @@ Lark(grammar::String,options,source,cache_file) = begin
     end
 end
 
+_prepare_callbacks(options,rules) = begin
+    parser_class = get_frontend(options.parser,options.lexer)
+    _callbacks = nothing
+    if options.ambiguity != "forest"
+        _parse_tree_builder = ParseTreeBuilder(rules,
+                                               propagate_positions = options.propagate_positions,
+                                               ambiguous = options.parser != "lalr" && options.ambiguity=="explicit",
+                                               maybe_placeholders=options.maybe_placeholders)
+        _callbacks = create_callback(_parse_tree_builder,transformer=options.transformer)
+    end
+    return parser_class,_callbacks
+end
+
 _build_parser(options,rules,lexer_conf) = begin
-    parser_class = get_frontend(options["parser"],options["lexer"])
-    _parse_tree_builder = ParseTreeBuilder(rules,
-                                           propagate_positions = options["propagate_positions"],
-                                           keep_all_tokens=options["keep_all_tokens"],
-                                           ambiguous = options["parser"] != "lalr")
-    callback = create_callback(_parse_tree_builder,transformer=options["transformer"])
-    parser_conf = ParserConf(rules,callback,options["start"])
+    parser_class,callbacks = _prepare_callbacks(options,rules)
+    parser_conf = ParserConf(rules,callbacks,options.start)
     return parser_class(lexer_conf,parser_conf,options=options)
 end
 
@@ -152,15 +236,17 @@ end
 
 lex(l::Lark, text) = begin
     stream = lex(l.lexer,text)
-    if l.options["postlex"]
-        return process(l.options["postlex"],stream)
+    if l.options.postlex
+        return process(l.options.postlex,stream)
     end
     return stream
 end
 
-parse(l::Lark,text) = begin
+get_terminal(l::Lark,name) = l._terminals_dict[name]
+
+parse(l::Lark,text;start=nothing,on_error=nothing) = begin
     try
-        parse(l.parser,text)
+        parse(l.parser,text,start=start)
     catch ex
         if ex isa TaskFailedException
             rethrow(ex.task.exception)
@@ -168,5 +254,6 @@ parse(l::Lark,text) = begin
             rethrow(ex)
         end
     end
+    # TODO Add lark 0.11.0 fancy error handling
 end
 
