@@ -275,7 +275,7 @@ struct ParseTreeBuilder
 end
 
 ParseTreeBuilder(rules::Array{Rule,1};propagate_positions=false,ambiguous=false,maybe_placeholders=false)= begin
-    rule_builders = collect(_init_builders(rules,ambiguous,propagate_positions,maybe_placeholders))
+    rule_builders = _init_builders(rules,ambiguous,propagate_positions,maybe_placeholders)
     ParseTreeBuilder(rule_builders)
 end
 
@@ -284,10 +284,11 @@ end
 ## Note the Python behaviour of 'and' and 'or'; they return the most recent argument
 # that has been evaluated
 
-_init_builders(rules,ambiguous,propagate_positions,maybe_placeholders) = Channel() do buildchan
+_init_builders(rules,ambiguous,propagate_positions,maybe_placeholders) = begin
+    build_list = []
     for rule in rules
         options = rule.options
-        keep_all_tokens = options.keep_all_tokens
+        keep_all_tokens = options !== nothing ? options.keep_all_tokens : false
         expand_single_child = options.expand1
         wrapper_chain =
             filter(x-> typeof(x) != Bool, [
@@ -300,8 +301,9 @@ _init_builders(rules,ambiguous,propagate_positions,maybe_placeholders) = Channel
                 end,
                 if ambiguous AmbiguousIntermediateExpander else false end
             ])
-        put!(buildchan, (rule,wrapper_chain))
+        push!(build_list, (rule,wrapper_chain))
     end
+    return build_list
 end
 
 # These callbacks are executed during parsing, as each rule is

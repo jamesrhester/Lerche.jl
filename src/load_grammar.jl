@@ -513,9 +513,9 @@ _make_joined_pattern(regexp,flags_set) = begin
     if length(flags_set) > 1
         throw(GrammarError("Lerche doesn't support joining terminals with conflicting flags"))
     elseif length(flags_set) == 1
-        flags = flags_set[]
+        flags = first(flags_set)
     end
-    return PatternRE(regexp,flags_set[])
+    return PatternRE(regexp,flags)
 end
 
 struct TerminalTreeToPattern <: Transformer end
@@ -581,16 +581,16 @@ end
 
 _choice_of_rules(rules) = Tree("expansions",[Tree("expansion",[Token("RULE",name)]) for name in rules])
 
-nr_deepcopy_tree(t) = transform(Transformer_NonRecursive(false),t)
+nr_deepcopy_tree(t) = transform(Transformer_NonRecursive(),t)
 
 # Note order of fields matches call order
 mutable struct Grammar
-    rule_defs::Array{Tuple{String,Tree,RuleOptions}}
+    rule_defs::Array{Tuple{String,Array{Any,1},Tree,RuleOptions}}
     term_defs::Array{Tuple{String,Tuple{Tree,Int}}}
     ignore::Array{String}
 end
 
-compile(g::Grammar) = begin
+compile(g::Grammar, start, terminals_to_keep) = begin
     # Deepcopy to allow multiple calling
     term_defs = deepcopy(g.term_defs)
     rule_defs = [(n,p,nr_deepcopy_tree(t),o) for (n,p,t,o) in g.rule_defs]
@@ -628,8 +628,8 @@ compile(g::Grammar) = begin
     # 3. Convert EBNF to BNF (and apply step 1 and 2)
     ebnf_to_bnf = EBNF_to_BNF()
     rules = []
-    i = 0
-    while i < length(rule_defs)
+    i = 1
+    while i <= length(rule_defs)  #instead of for loop as rule_defs might grow
         name, params, rule_tree, options = rule_defs[i]
         i +=1
         if length(params) != 0   #Don't transform templates
@@ -651,7 +651,7 @@ compile(g::Grammar) = begin
     rule_tree_to_text = RuleTreeToText()
     
     simplify_rule = SimplifyRule_Visitor()
-    compiled_rules = []
+    compiled_rules = Rule[]
     for (name, tree, options) in rules
         visit(simplify_rule,tree)
         #println("Tree after simplification:\n$tree")
@@ -663,7 +663,7 @@ compile(g::Grammar) = begin
             end
             empty_indices = [x==_EMPTY for x in expansion]
             if any(empty_indices)
-                exp_options = copy(options) || RuleOptions()
+                exp_options = options !== nothing ? copy(options) : RuleOptions()
                 exp_options.empty_indices = empty_indices
                 expansion = [x for x in expansion if x!=_EMPTY]
             else
@@ -672,12 +672,12 @@ compile(g::Grammar) = begin
                 
             @assert all(x-> x isa LarkSymbol,expansion) expansion
 
-            rule = Rule(NonTerminal(name), expansion, order=i,alias=alias, options=options)
+            rule = Rule(NonTerminal(name), expansion, order=i,alias=alias, options=exp_options)
             push!(compiled_rules,rule)
         end
     end
 
-    if length(set(compiled_rules)) != length(compiled_rules)
+    if length(Set(compiled_rules)) != length(compiled_rules)
         duplicates = classify(compiled_rules, x->x)
         if dups in values(duplicates)
             if length(dups) > 1
@@ -690,6 +690,7 @@ compile(g::Grammar) = begin
         compiled_rules = collect(Set(compiled_rules))
 
     end
+
     # Filter out unused rules
     while true
         c = length(compiled_rules)
@@ -699,6 +700,7 @@ compile(g::Grammar) = begin
                             && s != r.origin])
         union!(used_rules, Set([NonTerminal(s) for s in start]))
         compiled_rules, unused = classify_bool(compiled_rules, r -> r.origin in used_rules)
+        println("$(typeof(compiled_rules))")
         for r in unused
             debug(logger,"Unused rule: $r")
         end
@@ -713,7 +715,7 @@ compile(g::Grammar) = begin
                       if t isa Terminal])
     terminals, unused = classify_bool(terminals, t -> t.name in used_terms || t.name in g.ignore || t.name in terminals_to_keep)
     if length(unused) > 0
-        debug(logger,"Unused terminals: $([t.name for t in unused])")
+        @debug "Unused terminals: $([t.name for t in unused])"
     end
     
     return terminals, compiled_rules, g.ignore
@@ -775,7 +777,7 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
             @assert symbol.type_ == "RULE"
             _, params, tree, options = imported_rules[symbol]
             params_map = Dict([p => (p[1]!='_' ? "$namespace__$p" : "_$namespace__$p") for p in params])
-            for t in iter_subtrees(tree)
+            for t in tree
                 for (i, c) in enumerate(t.children)
                     if c isa Token && c.type_ in ("RULE", "TERMINAL")
                         t.children[i] = Token(c.type_, get_namespace_name(c, params_map))
@@ -824,7 +826,7 @@ resolve_term_references(term_defs) = begin
         if term != nothing    # Not just declared
             for child in term.children
                 # Python version uses `id` here; we can't
-                if term in iter_subtrees(child)
+                if term in child   #iterate for trees is iter_subtree
                     throw(GrammarError("Recursion in terminal '$name' (recursion is only allowed in rules, not terminals)"))
                 end
             end
@@ -896,7 +898,7 @@ const ERRORS = [
 """
 The GrammarLoader class is responsible for loading in the parser for the Lark EBNF itself.
 """
-mutable struct GrammarLoader
+struct GrammarLoader
     parser
     global_keep_all_tokens
 end
@@ -922,7 +924,7 @@ end
 import_grammar(gl::GrammarLoader,grammar_path;base_path=nothing, import_paths=[]) = begin
     if !(grammar_path in keys(_imported_grammars))
         # import_paths take priority over base_path since they should handle relative imports and ignore everything else.
-        to_try = vcat(import_paths, base_path !== nothing ? [base_path] : [])
+        to_try = vcat(import_paths, base_path !== nothing ? [base_path] : IMPORT_PATHS)
         text = nothing
         joined_path = nothing  #scope
         for source in to_try
@@ -936,12 +938,12 @@ import_grammar(gl::GrammarLoader,grammar_path;base_path=nothing, import_paths=[]
                 continue
             end
             if isnothing(text) continue end
-            grammar = load_grammar(gl, text, joined_path, import_paths)
+            grammar = load_grammar(gl, text, grammar_name=joined_path, import_paths=import_paths)
             _imported_grammars[grammar_path] = grammar
             break
         end
         if text === nothing   #failed, raise not found error
-            open(grammar_path,"r")
+            Base.open(grammar_path,"r")
             @assert false
         end
     end
@@ -986,7 +988,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
     #println("Check: term_defs $term_defs\nrule_defs $rule_defs")
     
     # Execute statements
-    ignore, imports = [] , Set()
+    ignore, imports = [] , Dict()
     for a_stmt in statements
         @assert length(a_stmt) == 1
         stmt = a_stmt[1]
@@ -994,6 +996,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
             t = stmt.children[1]
             push!(ignore,t)
         elseif stmt.data == "import"
+            println("import statement is $stmt")
             if length(stmt.children) > 1
                 path_node, arg1 = stmt.children
             else
@@ -1006,7 +1009,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
                 aliases = Dict(zip(names,names))  # Can't have aliased multi import, so all aliases will be the same as names
             else  # Single import
                 dotted_path = tuple(path_node.children[1:end-1])
-                names = path_node.children[end]  # Get name from dotted path
+                name = path_node.children[end]  # Get name from dotted path
                 aliases = Dict(name=> arg1 !== nothing ? arg1 : name )
             end # Aliases if exist
 
@@ -1018,7 +1021,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
                 else
                     base_file = grammar_name  # Import relative to grammar file path if external grammar file
                 end
-                if base_file
+                if base_file !== nothing
                     base_path = first(splitdir(base_file))
                 else
                     base_path = pwd()
@@ -1027,7 +1030,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
 
             try
                 import_base_path, import_aliases = imports[dotted_path]
-                @assert base_path == import_base_path, "Inconsistent base path for $(join(dotted_path,"."))"
+                @assert base_path == import_base_path "Inconsistent base path: $base_path != $import_base_path"
                 merge!(import_aliases,aliases)
             catch e
                 if e isa KeyError
@@ -1048,7 +1051,9 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
     # import grammars
     for (dotted_path, ba) in imports
         base_path, aliases = ba
-        grammar_path = joinpath(dotted_path...) * EXT
+        println("Dotted path is $dotted_path, type $(typeof(dotted_path))")
+        grammar_path = joinpath([x.value for x in dotted_path...]...) * EXT
+        println("Grammar path is $grammar_path")
         g = import_grammar(gl, grammar_path, base_path=base_path, import_paths=import_paths)
         new_td, new_rd = import_from_grammar_into_namespace(g, join(dotted_path,"__"), aliases)
 
@@ -1105,15 +1110,19 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
     resolve_term_references(term_defs)
     rules = rule_defs
     rule_names = Dict()
+    # Keep RuleOptions immutable by creating a whole new instance
+    if gl.global_keep_all_tokens
+        rules = [(a,b,c,RuleOptions(d,true)) for (a,b,c,d) in rules]
+    end
     for (name, params, _x, option) in rules
-        if gl.keep_all_tokens
-            option.keep_all_tokens = true
+        if gl.global_keep_all_tokens
+            option = RuleOptions(option,true)
         end
         if startswith(name, "__")
             throw(GrammarError("Names starting with double-underscore are reserved (Error at $name)"))
         end
             
-        if name in rule_names
+        if name in keys(rule_names)
             throw(GrammarError("Rule '$name' defined more than once"))
         end
         rule_names[name] = length(params)
@@ -1149,18 +1158,22 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
                     throw(GrammarError("Token '$sym' used but not defined (in rule $name)"))
                 end
             else
-                if !(sym in rule_names) && !(sym in params)
+                if !(sym in keys(rule_names)) && !(sym in params)
                     throw(GrammarError("Rule '$sym' used but not defined (in rule $name)"))
                 end
             end
         end
     end
-                    
+println("Types: $(typeof(rules)), $(typeof(term_defs)), $(typeof(ignore_names))")
     return Grammar(rules, term_defs, ignore_names)
 
 end
 
 # Load grammar from a string
 load_grammar(grammar,source,import_paths,global_keep_all_tokens) = begin
-    load_grammar(GrammarLoader(global_keep_all_tokens),grammar,grammar_name=source,import_paths=import_paths)
+    if global_keep_all_tokens
+        load_grammar(_lark_grammar_t,grammar,grammar_name=source,import_paths=import_paths)
+    else
+        load_grammar(_lark_grammar_f,grammar,grammar_name=source,import_paths=import_paths)
+    end
 end

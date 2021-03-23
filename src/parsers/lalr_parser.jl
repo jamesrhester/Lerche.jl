@@ -23,7 +23,7 @@ LALRParser(parser_conf;debug=false) = begin
 end
 
 parse(l::LALRParser,args...;kwargs...) = begin
-    println("Parsing with $args, $kwargs")
+    #println("Parsing with $args, $kwargs")
     parse(l.parser,args...,kwargs...)
 end
 
@@ -61,7 +61,7 @@ ParserState(parse_conf;state_stack=nothing,value_stack=nothing) = begin
                 )
 end
 
-position(ps::ParserState) = ps.state_stack[end]
+position(ps::ParserState) = first(ps.state_stack)
 
 feed_token!(ps::ParserState,token;is_end=false) = begin
     state_stack = ps.state_stack
@@ -73,9 +73,9 @@ feed_token!(ps::ParserState,token;is_end=false) = begin
         arg = nothing  #create outside scope of try
         action = nothing # ditto
         state = first(state_stack)
-        println("State $state, current token $token")
+        #println("State $state, current token $token")
         try
-            println("Possibles: $(states[state])")
+            #println("Possibles: $(states[state])")
             action,arg = states[state][token.type_]
         catch e
             if e isa KeyError
@@ -88,25 +88,25 @@ feed_token!(ps::ParserState,token;is_end=false) = begin
         @assert arg != end_state
         if action == :shift
             @assert !is_end
-            println("Shift!")
+            #println("Shift!")
             push!(state_stack,arg)
             push!(value_stack,token)
             return
         end
         rule = arg
         size = length(rule.expansion)
+        #println("Preparing to pop $size values")
         if size > 0
             s = grab!(value_stack,size)
             for i = 1:size
                 pop!(state_stack)
-                pop!(value_stack)
             end
         else
             s = []
         end
         value = callbacks[rule](s)
 
-        println("Reduced, value now $value")
+        #println("Reduced, value now $value")
         _action, new_state = states[first(state_stack)][rule.origin.name]
         @assert _action == :shift
         push!(state_stack,new_state)
@@ -139,10 +139,13 @@ parse_from_state(p::_Parser,lexer,state::ParserState) = begin
     try
         token = nothing
         for token in lp
-            println("Seen $token")
+            #println("Seen $token")
             feed_token!(state,token)
         end
-        token = !(token===nothing) ? new_borrow_pos("\$END","",token) : Token("\$END","",0,1,1)
+        token = !(token===nothing) ? new_borrow_pos("\$END","",token) : Token("\$END","",
+                                                                              pos_in_stream=0,
+                                                                              line=1,
+                                                                              column=1)
         return feed_token!(state,token,is_end=true)
     catch e
         if e isa UnexpectedInput
@@ -150,10 +153,11 @@ parse_from_state(p::_Parser,lexer,state::ParserState) = begin
             try
                 e.puppet = ParserPuppet(p,state,lexer)
             catch f
-                if !(f isa NameError)
-                    rethrow(f)
+                if !(f isa UndefVarError) #parser puppet might not be defined
+                    throw(f)
                 end
             end
+            rethrow(e)
         else
             if p.debug
                 println("")

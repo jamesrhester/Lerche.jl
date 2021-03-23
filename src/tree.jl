@@ -158,7 +158,6 @@ Base.iterate(t::Tree,s) = begin
     return l[idx],(seen,l,idx)
 end
 
-
 tree_set(t::Tree,data,children) = begin
     t.data = data
     t.children = children

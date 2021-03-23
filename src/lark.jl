@@ -164,7 +164,7 @@ Lark(grammar::String,loptions,source,cache_file) = begin
     # Compile the EBNF grammar into BNF
     try
         terminals, rules, ignore_tokens = compile(grammar,options.start,terminals_to_keep)
-        if options.edit_terminals
+        if options.edit_terminals !== nothing
             for t in terminals
                 options.edit_terminals(t)
             end
@@ -173,7 +173,7 @@ Lark(grammar::String,loptions,source,cache_file) = begin
 
         if options.priority == "invert"
             for rule in rules
-                if rule.options.priority != nothing
+                if rule.options.priority !== nothing
                     rule.options.priority = -rule.options.priority
                 end
             end
@@ -184,9 +184,11 @@ Lark(grammar::String,loptions,source,cache_file) = begin
                 end
             end
         end
-        lexer_callbacks = options.transformer ? _get_lexer_callbacks(options.transformer,terminals) : Dict()
+        lexer_callbacks = options.transformer !== nothing ? _get_lexer_callbacks(options.transformer,terminals) : Dict()
         merge!(lexer_callbacks,options.lexer_callbacks)
-        lexer_conf = LexerConf(terminals,ignore_tokens,options.postlex,lexer_callbacks,options.g_regex_flags)
+        lexer_conf = LexerConf(terminals,ignore=ignore_tokens,postlex=options.postlex,
+                               callbacks=lexer_callbacks,
+                               g_regex_flags=options.g_regex_flags)
         ## Note that lexer is not preserved so will do nothing.
         if options.parser !== nothing
             parser = _build_parser(options,rules,lexer_conf)
@@ -207,6 +209,7 @@ _prepare_callbacks(options,rules) = begin
     parser_class = get_frontend(options.parser,options.lexer)
     _callbacks = nothing
     if options.ambiguity != "forest"
+        println("Rules are $(typeof(rules)), value $rules")
         _parse_tree_builder = ParseTreeBuilder(rules,
                                                propagate_positions = options.propagate_positions,
                                                ambiguous = options.parser != "lalr" && options.ambiguity=="explicit",

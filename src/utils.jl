@@ -1,8 +1,8 @@
 export have_method,invoke_callback, @rule, @inline_rule
 
 classify_bool(seq, pred) = begin
-    true_elems = []
-    false_elems = []
+    true_elems = eltype(seq)[]
+    false_elems = eltype(seq)[]
 
     for elem in seq
         if pred(elem)

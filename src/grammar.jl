@@ -54,6 +54,9 @@ end
 
 RuleOptions(;keep_all_tokens=false,expand1=false,priority=nothing,template_source=nothing,empty_indices=()) = RuleOptions(keep_all_tokens,expand1,priority,template_source,empty_indices)
 
+# A copy-but-change-keep-all-tokens rule
+RuleOptions(ro::RuleOptions,b::Bool) = RuleOptions(b,ro.expand1,ro.priority,ro.template_source,ro.empty_indices)
+
 Base.show(io::IO,ro::RuleOptions) = begin
     print(io,"RuleOptions($(ro.keep_all_tokens),$(ro.expand1), $(ro.priority), $(ro.template_source))")
 end
@@ -63,10 +66,12 @@ mutable struct Rule
     expansion::Array{LarkSymbol}
     order::Int32
     alias::Union{Nothing,String}
-    options::Union{Nothing,RuleOptions}
+    options::RuleOptions
 end
 
-Rule(origin,expansion;order=0,alias=nothing,options=nothing) = Rule(origin,expansion,order,alias,options)
+Rule(origin,expansion;order=0,alias=nothing,options=nothing) = begin
+    Rule(origin,expansion,order,alias,options === nothing ? RuleOptions() : options)
+end
 
 Base.show(io::IO,r::Rule) = print(io,"<$(r.origin.name):  $(join(r.expansion," "))>")
 

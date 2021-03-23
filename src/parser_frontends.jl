@@ -66,7 +66,7 @@ make_lexer(wl::WithLexer,text) = begin
     return LexerThread(lexer,text)
 end
 
-parse(wl::WithLexer,text,start=nothing) = begin
+parse(wl::WithLexer,text;start=nothing) = begin
     _parse(wl,start,make_lexer(wl,text))
 end
 

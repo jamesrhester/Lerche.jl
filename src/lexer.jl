@@ -302,7 +302,9 @@ TraditionalLexer(conf) = begin
     TraditionalLexer(newline_types,ignore_types,callback,terminals,build_mres(temp_terminals,conf.g_regex_flags))
 end
 
+# Note that an empty string will match an empty regex, instead of returning nothing
 match(tl::TraditionalLexer,text,pos) = begin
+    if tl.mres[1] == r"" return nothing end
     m = Base.match(tl.mres[1],SubString(text,pos))
     if !(m===nothing)
         match_num = findfirst(v -> v!=nothing,m.captures)
@@ -310,16 +312,17 @@ match(tl::TraditionalLexer,text,pos) = begin
     end
 end
 
-next_token(tl::TraditionalLexer,lex_state,dummy) = begin
+next_token(tl::TraditionalLexer,lex_state) = begin
     line_ctr = lex_state.line_ctr
-    while line_ctr.char_pos < length(lex_state.text)
+    #println("Pos: $(line_ctr.char_pos), remaining text\n"*lex_state.text[line_ctr.char_pos:end]*"EOF")
+    while line_ctr.char_pos <= length(lex_state.text)
         res = match(tl,lex_state.text,line_ctr.char_pos)
         if res === nothing
-            allowed = Set(values(tl.mres[2])) - tl.ignore_types
+            allowed = setdiff(Set(values(tl.mres[2])), tl.ignore_types)
             if length(allowed) == 0
                 allowed = Set(["<END-OF-FILE>"])
             end
-            throw(UnexpectedCharacters(lex_state.text,line_ctr.char_pos,line_ctr.line,line_ctr.column,allowed=allowed,token_history=lex_state.last_token && [lex_state.last_token]))
+            throw(UnexpectedCharacters(lex_state.text,line_ctr.char_pos,line_ctr.line,line_ctr.column,allowed=allowed,token_history=lex_state.last_token !== nothing ? [lex_state.last_token] : nothing))
         end
         value,type_ = res
         if !(type_ in tl.ignore_types)
@@ -342,8 +345,10 @@ next_token(tl::TraditionalLexer,lex_state,dummy) = begin
             feed!(line_ctr,value,test_newline=type_ in tl.newline_types)
         end
     end
-    throw(EOFError())
+    return nothing
 end
+
+next_token(tl::TraditionalLexer,ls,dummy) = next_token(tl,ls)
 
 include("common.jl")   #definitions for LexerConf and ParserConf
 
@@ -370,8 +375,7 @@ ContextualLexer(conf::LexerConf,states;always_accept=()) = begin
         tokens_by_name[t.name] = t
     end
 
-    trad_conf = copy(conf)
-    trad_conf.tokens = terminals
+    trad_conf = reconfigure(conf,terminals)
     lexer_by_tokens = Dict()
     lexers = Dict()
     lexer = missing  #define in outer scope
@@ -383,8 +387,7 @@ ContextualLexer(conf::LexerConf,states;always_accept=()) = begin
         catch KeyError
             accepts = union( Set(accepts), conf.ignore, always_accept)
             state_tokens = [tokens_by_name[n] for n in accepts if (n != nothing && n in keys(tokens_by_name))]
-            lexer_conf = copy(trad_conf)
-            lexer_conf.tokens = state_tokens
+            lexer_conf = reconfigure(trad_conf,state_tokens)
             lexer = TraditionalLexer(lexer_conf)
             lexer_by_tokens[key] = lexer
             #println("Added lexer that accepts $key")
@@ -407,6 +410,8 @@ next_token(cl::ContextualLexer,lexer_state,parser_state) = begin
         elseif e isa UnexpectedCharacters
             token = next_token(cl.root_lexer,lexer_state)
             throw(UnexpectedToken(token,e.allowed,state=position(parser_state)))
+        else
+            rethrow(e)
         end
     end
 end
@@ -441,10 +446,14 @@ LexerParser(lt::LexerThread,ps) = begin
 end
 
 Base.iterate(l::LexerParser) = begin
-    return (next_token(l.lexer,l.lexer_state,l.parser_state),0)
+    n = next_token(l.lexer,l.lexer_state,l.parser_state)
+    if n === nothing return n end
+    return (n,0)
 end
 
 Base.iterate(l::LexerParser,dummy) = begin
-    return (next_token(l.lexer,l.lexer_state,l.parser_state),0)
+    n = next_token(l.lexer,l.lexer_state,l.parser_state)
+    if n === nothing return n end
+    return (n,0)
 end
 

@@ -28,6 +28,10 @@ LexerConf(tokens;ignore=(),postlex=nothing,callbacks=Dict(),g_regex_flags=0,skip
     LexerConf(tokens,ignore,postlex,callbacks,new_flags,skip_validation)
 end
 
+reconfigure(l::LexerConf,tokens) = begin
+    LexerConf(tokens,l.ignore,l.postlex,l.callbacks,l.g_regex_flags,l.skip_validation)
+end
+
 struct ParserConf
     rules::Array{Rule}
     callbacks::Dict{Rule,Function}

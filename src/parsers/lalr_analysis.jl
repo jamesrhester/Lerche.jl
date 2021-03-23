@@ -236,16 +236,18 @@ compute_includes_lookback(l::LALR_Analyzer) = begin
                 nt2 = (state2, s)
                 state2 = state2.transitions[s]
                 if !(nt2 in keys(l.reads))
+                    #println("At $i skipping to next index")
                     continue
                 end
-                j = i+1  #to fix the scope so we can mimic Python for...else
+                j = -1  #to fix the scope so we can mimic Python for...else
+                #println("Final j is $(length(rp.rule.expansion)-1)")
                 for outer j in (i + 1):(length(rp.rule.expansion)-1)
                     if !(rp.rule.expansion[j+1] in l.NULLABLE)
                         break
                     end
                 end
                 # mimic for...else in Python code
-                if j == length(rp.rule.expansion)
+                if j == length(rp.rule.expansion)-1 || j == -1
                     push!(includes,nt2)
                 end
             end

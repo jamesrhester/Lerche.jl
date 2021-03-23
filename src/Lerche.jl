@@ -47,8 +47,9 @@ end
 
 # Prepare the Lark EBNF parser
 
-const _lark_grammar = GrammarLoader(false)
+const _lark_grammar_f = GrammarLoader(false)
+const _lark_grammar_t = GrammarLoader(true)
 
-load_grammar(text::String;options...) = load_grammar(_lark_grammar,text;options...)
+#load_grammar(text::String;options...) = load_grammar(_lark_grammar,text;options...)
 
 end # module

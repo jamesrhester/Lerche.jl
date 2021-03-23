@@ -31,7 +31,7 @@ get_context(ui::UnexpectedInput,text;span=40) = begin
     _end = min(pos + span,length(text))
     before = rsplit(text[start:pos],"\n",limit=2)[end]
     after = split(text[pos+1:_end],"\n",limit=2)[1]
-    return before*after*"\n"*repeat(" ",length(before)) * "^\n"
+    return before*after*"\n"*repeat(" ",length(before)-1) * "^\n"
 end
 
 """ 
@@ -60,17 +60,17 @@ match_examples(ui::UnexpectedInput,parse_call,examples,token_type_match_fallback
                 if ut isa UnexpectedInput
                     if ut.state == ui.state
                         if use_accepts && ut.accepts != ui.accepts
-                            debug(logger,"Different accepts with the same state[$(ui.state)]: $(ui.accepts) != $(ut.accepts) at example [$i][$j]")
+                            @debug "Different accepts with the same state[$(ui.state)]: $(ui.accepts) != $(ut.accepts) at example [$i][$j]"
                             continue
                         end
                         try
                             if ut.token == ui.token
-                                debug(logger,"Exact match at example [$i][$j]")
+                                @debug "Exact match at example [$i][$j]"
                                 return label
                             end
                             if token_type_match_fallback
                                 if (ut.token.type_ == ui.token.type_) && candidate[end]==nothing
-                                    debug(logger,"Token type fallback at example [$i][$j]")
+                                    @debug "Token type fallback at example [$i][$j]"
                                     candidate = label,true
                                 end
                             end
@@ -80,7 +80,7 @@ match_examples(ui::UnexpectedInput,parse_call,examples,token_type_match_fallback
                             end
                         end
                         if candidate[1] == nothing
-                            debug(logger,"Same state match at example [$i][$j]")
+                            @debug "Same state match at example [$i][$j]"
                             candidate = label,false
                         end
                     end
@@ -105,17 +105,17 @@ struct UnexpectedCharacters <: UnexpectedInput
     token_history
 end
 
-UnexpectedCharacters(seq,lex_pos,line,column;allowed=nothing,consider_tokens=nothing,state=nothing,token_history=nothing) = UnexpectedCharacters(seq,lex_pos,line,column,allowed,considered_tokens,state,token_history)
+UnexpectedCharacters(seq,lex_pos,line,column;allowed=nothing,consider_tokens=nothing,state=nothing,token_history=nothing) = UnexpectedCharacters(seq,lex_pos,line,column,allowed,consider_tokens,state,token_history)
 
 Base.showerror(io::IO,uc::UnexpectedCharacters) = begin
     s = uc.seq[uc.pos_in_stream]
     message = "No terminal defined for $s at line $(uc.line) col $(uc.column)"
     message = message * "\n\n" * get_context(uc,uc.seq)
     if uc.allowed != nothing
-        message *= "\nExpecting: $allowed"
+        message *= "\nExpecting: $(uc.allowed)"
     end
     if uc.token_history != nothing
-        message *= "\nPrevious tokens: " * join(token_history,", ")*"\n"
+        message *= "\nPrevious tokens: " * join(uc.token_history,", ")*"\n"
     end
     println(io,message)
 end

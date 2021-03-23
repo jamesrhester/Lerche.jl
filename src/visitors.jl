@@ -111,7 +111,7 @@ _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
 end
 
 _call_userfunc_token(t::Transformer,token) = begin
-    return token_func(t,Val{Symbol(token)},token)
+    return token_func(t,Val{Symbol(token)}(),token)
 end
 
 # No need for a channel here as we just collect the results anyway.
@@ -195,11 +195,13 @@ transform(tip::Transformer_InPlace, tree) = begin
     return _transform_tree(tip,tree)
 end
 
-abstract type Transformer_NonRecursive <: Transformer end
+struct Transformer_NonRecursive <: Transformer end
+
+visit_tokens(t::Transformer_NonRecursive) = false
 
 transform(tnr::Transformer_NonRecursive, tree) = begin
     rev_postfix = []
-    q = [tree]
+    q = Union{Token,Tree}[tree]
     while !isempty(q)
         t = pop!(q)
         push!(rev_postfix,t)
@@ -217,7 +219,7 @@ transform(tnr::Transformer_NonRecursive, tree) = begin
             else
                 args = []
             end
-            push!(stack,_call_userfunc(x,args))
+            push!(stack,_call_userfunc(tnr,x,new_children=args))
         else
             push!(stack,x)
         end
