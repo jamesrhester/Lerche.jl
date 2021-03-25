@@ -322,7 +322,11 @@ create_callback(ptb::ParseTreeBuilder;transformer=nothing) = begin
     for (rule,wrapper_chain) in ptb.rule_builders
         #println("Rule: $(rule.origin)")
         # Now find the actual transformer function ...
-        user_callback_name = if rule.alias != nothing rule.alias else rule.origin.name end
+        user_callback_name =
+            if rule.alias !== nothing rule.alias
+            elseif rule.options.template_source !== nothing rule.options.template_source
+            else rule.origin.name
+            end
         f = partial(transformer_func,transformer,Val{Symbol(user_callback_name)}(),Meta())
         if typeof(transformer) <: Transformer_InPlace
             f = inplace_transformer(f)

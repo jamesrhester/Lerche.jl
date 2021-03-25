@@ -3,7 +3,7 @@ const _lark_defaults = Dict([
         "debug"=> false,
         "keep_all_tokens"=> false,
         "postlex"=> nothing,
-        "parser"=> "earley",
+        "parser"=> "lalr",
         "lexer"=> "auto",
         "transformer"=> nothing,
         "start"=> "start",
@@ -19,7 +19,7 @@ const _lark_defaults = Dict([
     ])
 
 """
-        parser - Decides which parser engine to use, "earley" or "lalr". (Default: "earley")
+        parser - Decides which parser engine to use, "earley" or "lalr". (Default: "lalr")
                  Note: "lalr" requires a lexer
 
         lexer - Decides whether or not to use a lexer stage
@@ -63,7 +63,7 @@ struct LarkOptions
             options["start"] = [options["start"]]
         end
         if !(options["parser"] in ("earley", "lalr", "cyk", nothing))
-            error("Option error: Parser must be earley, lalr, cyk or nothing")
+            error("Option error: Parser must be earley, lalr, cyk or nothing, given $(options["parser"])")
         end
         if options["parser"] == "earley" && !(options["transformer"]==nothing)
             error("Cannot specify an embedded transformer when using the Earley algorithm." *
@@ -105,10 +105,9 @@ end
 const VALID_PRIORITY_OPTIONS = ("auto", "normal", "invert", nothing)
 const VALID_AMBIGUITY_OPTIONS = ("auto", "resolve", "explicit", "forest")
 
-Lark(grammar::IOStream;options...) = begin
-    source = grammar.name
+Lark(grammar::IOStream,source;options...) = begin
     cache_file = "larkcache_$(basename(source))"
-    textgrammar = read(grammar)
+    textgrammar = read(grammar,String)
     Lark(textgrammar,Dict{String,Any}((String(k),v) for (k,v) in options),source,cache_file)
 end
 
@@ -228,9 +227,9 @@ end
 open(grammar_filename;rel_to=nothing,options...) = begin
     if rel_to != nothing
         basepath = dirname(rel_to)
-        grammar_filename = join(basepath,grammar_filename)
+        grammar_filename = joinpath(basepath,grammar_filename)
     end
-    Lark(grammar_filename,options...)
+    Lark(Base.open(grammar_filename),grammar_filename,options...)
 end
 
 show(io::IOStream,l::Lark) = begin

@@ -31,6 +31,10 @@ end
 
 end
 ==#
+@testset "Big list" begin
+    g = "start: " * join(["\"$i\"" for i in 1:250])
+    Lark(g,parser="lalr")
+end
 
 @testset "Infinite recursion" begin
 
@@ -270,6 +274,92 @@ make_parser_test(lexer,parser) = begin
         @test x.children == ["starts"]
     end
 
+    @testset "test_templates" begin
+            g = make_lark(raw"""
+                       start: "[" sep{NUMBER, ","} "]"
+                       sep{item, delim}: item (delim item)*
+                       NUMBER: /\d+/
+                       %ignore " "
+                       """)
+            x = Lerche.parse(g,"[1, 2, 3, 4]")
+            @test x.children == [Tree("sep", ["1", "2", "3", "4"])]
+            x = Lerche.parse(g,"[1]")
+        @test x.children == [Tree("sep", ["1"])]
+    end
+
+    @testset "test_templates_recursion" begin
+            g = make_lark(raw"""
+                       start: "[" _sep{NUMBER, ","} "]"
+                       _sep{item, delim}: item | _sep{item, delim} delim item
+                       NUMBER: /\d+/
+                       %ignore " "
+                       """)
+            x = Lerche.parse(g,"[1, 2, 3, 4]")
+            @test x.children == ["1", "2", "3", "4"]
+            x = Lerche.parse(g,"[1]")
+        @test x.children == ["1"]
+    end
+
+    @testset "test_templates_import" begin
+            g = Lerche.open("test_templates_import.lark", rel_to=@__FILE__)
+            x = Lerche.parse(g,"[1, 2, 3, 4]")
+            @test x.children == [Tree("sep", ["1", "2", "3", "4"])]
+            x = Lerche.parse(g,"[1]")
+            @test x.children == [Tree("sep", ["1"])]
+    end
+
+    @testset "test_templates_alias" begin
+            g = make_lark(raw"""
+                       start: expr{"C"}
+                       expr{t}: "A" t
+                              | "B" t -> b
+                       """)
+            x = Lerche.parse(g,"AC")
+            @test x.children == [Tree("expr", [])]
+            x = Lerche.parse(g,"BC")
+            @test x.children == [Tree("b", [])]
+        end
+
+        @testset "test_templates_modifiers" begin
+            g = make_lark(raw"""
+                       start: expr{"B"}
+                       !expr{t}: "A" t
+                       """)
+            x = Lerche.parse(g,"AB")
+            @test x.children == [Tree("expr", ["A", "B"])]
+            g = make_lark(raw"""
+                       start: _expr{"B"}
+                       !_expr{t}: "A" t
+                       """)
+            x = Lerche.parse(g,"AB")
+            @test x.children == ["A", "B"]
+            g = make_lark(raw"""
+                       start: expr{b}
+                       b: "B"
+                       ?expr{t}: "A" t
+                       """)
+            x = Lerche.parse(g,"AB")
+            @test x.children == [Tree("b",[])]
+        end
+
+        @testset "test_templates_templates" begin
+            g = make_lark("""start: a{b}
+                         a{t}: t{"a"}
+                         b{x}: x""")
+            x = Lerche.parse(g,"a")
+            @test x.children == [Tree("a", [Tree("b",[])])]
+        end
+
+        @testset "test_g_regex_flags" begin
+            g = make_lark("""
+                    start: "a" /b+/ C
+                    C: "C" | D
+                    D: "D" E
+                    E: "e"
+                    """, g_regex_flags=2)   #re.I
+            x1 = Lerche.parse(g,"ABBc")
+            x2 = Lerche.parse(g,"abdE")
+        end
 
     @testset "test_undefined_rule" begin
            @test_throws GrammarError  make_lark("""start: a""")
@@ -472,8 +562,38 @@ make_parser_test(lexer,parser) = begin
             @test tree.children == ["a", "A"]
         end
 
+        @testset "test_token_flags_verbose" begin
+            g = make_lark(raw"""start: NL | ABC
+                          ABC: / [a-z] /x
+                          NL: /\n/
+                      """)
+            x = Lerche.parse(g,"a")
+            @test x.children == ["a"]
+        end
+
+        @testset "test_token_flags_verbose_multiline" begin
+            g = make_lark(raw"""start: ABC
+                          ABC: /  a      b c
+                               d
+                                e f
+                           /x
+                       """)
+            x = Lerche.parse(g,"abcdef")
+            @test x.children == ["abcdef"]
+        end
+
+        @testset "test_token_multiline_only_works_with_x_flag" begin
+            g = raw"""start: ABC
+                    ABC: /  a      b c
+                              d
+                                e f
+                            /i
+                      """
+            @test_throws GrammarError make_lark(g)
+        end
+
         @testset "test_twice_empty" begin
-            g = """!start: [["A"]]
+            g = """!start: ("A"?)?
                 """
             l = make_lark(g)
             tree = Lerche.parse(l,"A")
@@ -567,6 +687,30 @@ make_parser_test(lexer,parser) = begin
 
             @test res.children != ["a", "b"]
             @test res.children == ["ab"]
+
+            grammar = """
+            start: A B | AB
+            A: "a"
+            B.-20: "b"
+            AB.-10: "ab"
+            """
+            l = make_lark(grammar)
+            res = Lerche.parse(l,"ab")
+            @test res.children == ["a", "b"]
+
+            # Lark difference: priority goes in an Int64 so can't be as big as
+            # in Python
+            grammar = """
+            start: A B | AB
+            A.-99999999999999: "a"
+            B: "b"
+            AB: "ab"
+            """
+            l = make_lark(grammar)
+            res = Lerche.parse(l,"ab")
+
+            @test res.children == ["ab"]
+
         end
 
         @testset "test_import" begin
@@ -808,6 +952,42 @@ make_parser_test(lexer,parser) = begin
             @test length(res.children)== 3
         end
 
+        @testset "test_multi_start" begin
+            p = make_lark("""
+                a: "x" "a"?
+                b: "x" "b"?
+                """, start=["a", "b"])
+
+            @test Lerche.parse(p,"xa", start="a") == Tree("a", Union{Token,Tree}[])
+            @test Lerche.parse(p,"xb", start="b") == Tree("b", Union{Token,Tree}[])
+        end
+
+        @testset "test_lexer_detect_newline_tokens" begin
+            # Detect newlines in regular tokens
+            println("lexer is $lexer, parser is $parser")
+            test_gram = raw"""start: "go" tail*
+            !tail : SA "@" | SB "@" | SC "@" | SD "@"
+            SA : "a" /\n/
+            SB : /b./s
+            SC : "c" /[^a-z]/
+            SD : "d" /\s/
+            """
+            g = make_lark(test_gram)
+            a,b,c,d = [x.children[2] for x in Lerche.parse(g,"goa\n@b\n@c\n@d\n@").children]
+            @test a.line == 2
+            @test b.line == 3
+            @test c.line == 4
+            @test d.line == 5
+
+            # Detect newlines in ignored tokens
+            for re in ["/\\n/", "/[^a-z]/", "/\\s/"]
+                g = make_lark("""!start: "a" "a"
+                             %ignore $re""")
+                a, b = Lerche.parse(g,"a\na").children
+                @test a.line == 1
+                @test b.line == 2
+            end
+        end
 end
 
 const TO_TEST = [("standard","lalr"),

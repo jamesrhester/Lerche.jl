@@ -33,6 +33,7 @@ mutable struct Tree
 end
 
 Tree(data,children) = Tree(data,children,Meta())
+Tree(data,children,n::Nothing) = Tree(data,children)
 
 meta(t::Tree) = t._meta
 
@@ -79,6 +80,31 @@ end
 Base.:(==)(t1::Tree,t2::Tree) = begin
     return t1.data == t2.data && t1.children == t2.children
 end
+
+# When comparing a tree with something else, we compare only
+# on data (as a string) and children. This is mainly for testing.
+#==Base.:(==)(t1::Tree,t2::Array) = begin
+    if length(t2) != 2
+        println("Not equal: length != 2")
+        return false
+    end
+    if t2[1] != t1.data
+        println("Not equal: $(t2[1]) != $(t1.data)")
+        return false
+    end
+    if length(t2[2]) != length(t1.children)
+        println("Not equal: child length differs")
+        return false
+    end
+    for (f,s) in zip(t1.children,t2[2])
+        if f != s
+            println("Not equal: $f != $s")
+            return false
+        end
+    end
+    return true
+end
+==#
 
 Base.hash(t1::Tree) = begin
     return hash(t1.data) + hash(t1.children)

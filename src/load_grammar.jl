@@ -363,21 +363,21 @@ PrepareAnonTerminals(terminals) = PrepareAnonTerminals(terminals,Set([td.name fo
 end
 
 mutable struct _ReplaceSymbols <: Transformer_InPlace
-    names
+    names::Dict
 end
 
 _ReplaceSymbols() = _ReplaceSymbols(Dict())
 
 @rule value(rs::_ReplaceSymbols,c) = begin
-    if length(c) == 1 && c[1] isa Token && c[1].value in rs.names
+    if length(c) == 1 && c[1] isa Token && c[1].value in keys(rs.names)
         return rs.names[c[1].value]
     end
     return __default__(rs,"value",c,nothing)
 end
 
 @rule template_usage(rs::_ReplaceSymbols,c) = begin
-    if c[1] in rs.names
-        return __default__(rs,"template_usage", [rs.names[c[1].name]] + c[2:end],nothing)
+    if c[1] in keys(rs.names)
+        return __default__(rs,"template_usage", vcat([rs.names[c[1]].name], c[2:end]),nothing)
     end
     return __default__(rs,"template_usage",c,nothing)
 end
@@ -385,7 +385,7 @@ end
 """Apply the templates, creating new rules that represent the used templates"""
 mutable struct ApplyTemplates <: Transformer_InPlace
     rule_defs
-    replacer
+    replacer::_ReplaceSymbols
     created_templates
 end
 
@@ -395,14 +395,14 @@ ApplyTemplates(rule_defs) = ApplyTemplates(rule_defs,_ReplaceSymbols(),Set())
     name = c[1]
     args = c[2:end]
     result_name = "$name{$(join(args,","))}"
-    if !(result_name in created_templates)
-        push!(created_templates,result_name)
-        (_n, params, tree, options) = (t for t in at.rule_defs if t[1] == name)[]
-        @assert length(params) == length(args), args
+    if !(result_name in at.created_templates)
+        push!(at.created_templates,result_name)
+        (_n, params, tree, options) = first(t for t in at.rule_defs if t[1] == name)
+        @assert length(params) == length(args) args
         result_tree = deepcopy(tree)
         at.replacer.names = Dict(zip(params, args))
         transform(at.replacer,result_tree)
-        push!(at.rule_defs((result_name, [], result_tree, deepcopy(options))))
+        push!(at.rule_defs,(result_name, [], result_tree, deepcopy(options)))
     end
     return NonTerminal(result_name)
 end
@@ -734,6 +734,8 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
         if symbol.type_ != "RULE"
             return []
         end
+        params = nothing
+        tree = nothing
         try
             _, params, tree, _ = imported_rules[symbol]
         catch e
@@ -747,8 +749,10 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
     end
     
     get_namespace_name(name,params) = begin
+        println("Namespace name for $name is...")
         if params !== nothing
             try
+                println("Param: $(params[name])")
                 return params[name]
             catch e
                 if !(e isa KeyError)
@@ -757,13 +761,15 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
             end
         end
         try
+            println("Alias: $(aliases[name].value)")
             return aliases[name].value
         catch e
             if e isa KeyError
+                println("Something with $namespace in it")
                 if name[1] == '_'
-                    return "_$namespace__$(name[2:end])"
+                    return "_$(namespace)__$(name[2:end])"
                 end
-                return "$namespace__$name"
+                return "$(namespace)__$name"
             end
             rethrow(e)
         end
@@ -776,7 +782,8 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
         else
             @assert symbol.type_ == "RULE"
             _, params, tree, options = imported_rules[symbol]
-            params_map = Dict([p => (p[1]!='_' ? "$namespace__$p" : "_$namespace__$p") for p in params])
+            params_map = Dict([p => (p[1]!='_' ? "$(namespace)__$p" : "_$(namespace)__$p") for p in params])
+            println("Params map is $params_map")
             for t in tree
                 for (i, c) in enumerate(t.children)
                     if c isa Token && c.type_ in ("RULE", "TERMINAL")
@@ -788,6 +795,7 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
             push!(rule_defs,(get_namespace_name(symbol,params_map), params, tree, options))
         end
     end
+    println("Rule defs: $rule_defs")
     return term_defs, rule_defs
 end
 
@@ -983,7 +991,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
 
     term_defs = [if length(td)==3 td else [td[1], 1, td[2]] end for td in term_defs]
     term_defs = [(name.value, (t, if !(typeof(p) <: Int) Base.parse(Int64,p.value) else p end)) for (name, p, t) in term_defs]
-    rule_defs = [options_from_rule(x[1],x[2:end]...) for x in rule_defs]
+    rule_defs = Any[options_from_rule(x[1],x[2:end]...) for x in rule_defs]
 
     #println("Check: term_defs $term_defs\nrule_defs $rule_defs")
     
@@ -1055,9 +1063,10 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
         grammar_path = joinpath([x.value for x in dotted_path...]...) * EXT
         println("Grammar path is $grammar_path")
         g = import_grammar(gl, grammar_path, base_path=base_path, import_paths=import_paths)
-        new_td, new_rd = import_from_grammar_into_namespace(g, join(dotted_path,"__"), aliases)
+        new_td, new_rd = import_from_grammar_into_namespace(g, join([x.value for x in dotted_path...],"__"), aliases)
 
         append!(term_defs,new_td)
+        println("Rule defs before new ones: $rule_defs")
         append!(rule_defs,new_rd)
     end
 
@@ -1135,7 +1144,7 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
             if p in keys(rule_names)
                 throw(GrammarError("Template Parameter conflicts with rule $p (in template $name)"))
             end
-            if p in params[1:i]
+            if p in params[1:i-1]
                 throw(GrammarError("Duplicate Template Parameter $p (in template $name)"))
             end
         end
