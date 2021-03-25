@@ -2,6 +2,7 @@ module Lerche
 
 using DataStructures  #For Stack when parsing
 using Logging         #Because Lark does
+using Serialization   #To pre-generate grammar
 
 export Tree, Token, Interpreter,Transformer, visit_children, visit,transform
 export GrammarError, ParseError, UnexpectedToken, UnexpectedCharacters
@@ -45,11 +46,31 @@ catch ex
     end
 end     
 
-# Prepare the Lark EBNF parser
+include("precompile.jl")
 
-const _lark_grammar_f = GrammarLoader(false)
-const _lark_grammar_t = GrammarLoader(true)
+@warnpcfail _precompile_()
+
+# Prepare the Lark EBNF parser
+have_cache = false
+storage = joinpath(@__DIR__,"..","deps","lark_grammar_serialised.jli")
+try
+    Base.open(storage,"r")
+    global have_cache=true
+catch e
+    println("$e")
+    println("Failed to load stored grammar, regenerating")
+end
+
+if have_cache
+    println("Loading Lark grammar from $storage")
+    const _lark_grammar_f, _lark_grammar_t = Serialization.deserialize(storage)
+else
+    const _lark_grammar_f = GrammarLoader(false)
+    const _lark_grammar_t = GrammarLoader(true)
+    Serialization.serialize(storage,(_lark_grammar_f,_lark_grammar_t))
+end
 
 #load_grammar(text::String;options...) = load_grammar(_lark_grammar,text;options...)
+
 
 end # module
