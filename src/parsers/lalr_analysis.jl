@@ -236,18 +236,17 @@ compute_includes_lookback(l::LALR_Analyzer) = begin
                 nt2 = (state2, s)
                 state2 = state2.transitions[s]
                 if !(nt2 in keys(l.reads))
-                    #println("At $i skipping to next index")
                     continue
                 end
-                j = -1  #to fix the scope so we can mimic Python for...else
-                #println("Final j is $(length(rp.rule.expansion)-1)")
-                for outer j in (i + 1):(length(rp.rule.expansion)-1)
+                _loop_success = true #emulate for..else in Python
+                for j in (i + 1):(length(rp.rule.expansion)-1)
                     if !(rp.rule.expansion[j+1] in l.NULLABLE)
+                        _loop_success = false
                         break
                     end
                 end
                 # mimic for...else in Python code
-                if j == length(rp.rule.expansion)-1 || j == -1
+                if _loop_success
                     push!(includes,nt2)
                 end
             end
@@ -270,11 +269,10 @@ end
 compute_lookaheads(l::LALR_Analyzer) = begin
     #println("$(length(l.nonterminal_transitions)), $(length(l.reads)), $(length(l.directly_reads))")
     read_sets = digraph(l.nonterminal_transitions, l.reads, l.directly_reads)
-    #println("Includes: length $(length(l.includes))")
+    
     follow_sets = digraph(l.nonterminal_transitions, l.includes, read_sets)
     
     for (nt, lookbacks) in l.lookback
-        #println("State $nt: lookaheads $(length(follow_sets[nt]))")
         for (state, rule) in lookbacks
             for s in follow_sets[nt]
                 push!(state.lookaheads[s],rule)
@@ -284,10 +282,10 @@ compute_lookaheads(l::LALR_Analyzer) = begin
 end
 
 compute_lalr1_states(l::LALR_Analyzer) = begin
-    m = Dict()
+    m = IdDict()
     reduce_reduce = []
     for state in l.lr0_states
-        actions = Dict()
+        actions = IdDict()
         for (la, next_state) in state.transitions
             actions[la] = (:shift, next_state.closure)
         end
@@ -314,7 +312,7 @@ compute_lalr1_states(l::LALR_Analyzer) = begin
             end
         end
         
-        m[state] = Dict([k.name => v for (k, v) in actions])
+        m[state] = IdDict([k.name => v for (k, v) in actions])
     end
     
     if !isempty(reduce_reduce)
@@ -329,8 +327,8 @@ compute_lalr1_states(l::LALR_Analyzer) = begin
         throw(GrammarError(join(msgs,"\n\n")))
     end
 
-    states = Dict([k.closure => v for (k, v) in m ])
-
+    states = IdDict([k.closure => v for (k, v) in m ])
+    
     # compute end states
     end_states = Dict()
     for state in keys(states)

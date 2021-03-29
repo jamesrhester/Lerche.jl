@@ -700,9 +700,9 @@ compile(g::Grammar, start, terminals_to_keep) = begin
                             && s != r.origin])
         union!(used_rules, Set([NonTerminal(s) for s in start]))
         compiled_rules, unused = classify_bool(compiled_rules, r -> r.origin in used_rules)
-        println("$(typeof(compiled_rules))")
+        #println("$(typeof(compiled_rules))")
         for r in unused
-            debug(logger,"Unused rule: $r")
+            @debug "Unused rule: $r"
         end
         if length(compiled_rules) == c
             break

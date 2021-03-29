@@ -315,7 +315,7 @@ end
 next_token(tl::TraditionalLexer,lex_state) = begin
     line_ctr = lex_state.line_ctr
     #println("Pos: $(line_ctr.char_pos), remaining text\n"*lex_state.text[line_ctr.char_pos:end]*"EOF")
-    while line_ctr.char_pos <= length(lex_state.text)
+    while line_ctr.char_pos <= lex_state.text_length
         res = match(tl,lex_state.text,line_ctr.char_pos)
         if res === nothing
             allowed = setdiff(Set(values(tl.mres[2])), tl.ignore_types)
@@ -356,10 +356,11 @@ mutable struct LexerState
     text::String
     line_ctr::LineCounter
     last_token::Union{Token,Nothing}
+    text_length::Int64   #optimisation for speed
 end
 
 LexerState(text,line_ctr;last_token=nothing) = begin
-    LexerState(text,line_ctr,last_token)
+    LexerState(text,line_ctr,last_token,length(text))
 end
 
 struct ContextualLexer <: Lexer

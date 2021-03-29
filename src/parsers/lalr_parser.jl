@@ -6,27 +6,6 @@
 # Adapted to Julia by James Hester (2019)
 # Email : james.r.hester@gmail.com
 
-struct LALRParser
-    _parse_table
-    parser_conf
-    parser
-    debug
-end
-
-LALRParser(parser_conf;debug=false) = begin
-    analysis = LALR_Analyzer(parser_conf,debug=debug)
-    compute_lalr!(analysis)
-    println("Finished analysis")
-    callbacks = parser_conf.callbacks
-    parser = _Parser(analysis.parse_table,callbacks)
-    LALRParser(analysis.parse_table,parser_conf,parser,debug)
-end
-
-parse(l::LALRParser,args...;kwargs...) = begin
-    #println("Parsing with $args, $kwargs")
-    parse(l.parser,args...,kwargs...)
-end
-
 struct ParseConf
     parse_table
     start_state
@@ -42,6 +21,27 @@ ParseConf(parse_table,callbacks,start) = begin
               parse_table.states,
               callbacks,
               start)
+end
+
+struct LALRParser
+    _parse_table
+    parser_conf::ParserConf
+    parser
+    debug::Bool
+end
+
+LALRParser(parser_conf;debug=false) = begin
+    analysis = LALR_Analyzer(parser_conf,debug=debug)
+    compute_lalr!(analysis)
+    println("Finished analysis")
+    callbacks = parser_conf.callbacks
+    parser = _Parser(analysis.parse_table,callbacks)
+    LALRParser(analysis.parse_table,parser_conf,parser,debug)
+end
+
+parse(l::LALRParser,args...;kwargs...) = begin
+    #println("Parsing with $args, $kwargs")
+    parse(l.parser,args...,kwargs...)
 end
 
 struct ParserState
@@ -75,7 +75,7 @@ feed_token!(ps::ParserState,token;is_end=false) = begin
         state = first(state_stack)
         #println("State $state, current token $token")
         try
-            #println("Possibles: $(states[state])")
+            #println("Possibles: $(keys(states[state]))\n")
             action,arg = states[state][token.type_]
         catch e
             if e isa KeyError
@@ -120,7 +120,7 @@ end
 struct _Parser
     parse_table
     callbacks
-    debug
+    debug::Bool
 end
 
 _Parser(parse_table,callbacks;debug=false) = begin
@@ -139,7 +139,7 @@ parse_from_state(p::_Parser,lexer,state::ParserState) = begin
     try
         token = nothing
         for token in lp
-            #println("Seen $token")
+            #println("Seen $(token.type_): $token")
             feed_token!(state,token)
         end
         token = !(token===nothing) ? new_borrow_pos("\$END","",token) : Token("\$END","",
