@@ -17,14 +17,19 @@
     - ``Transformer_InPlaceRecursive`` - Recursive. Changes the tree in-place instead of returning new instances
 
 Traits: 
-        visit_tokens (::Transformer) = true: Should the transformer visit tokens in addition to rules.
-                                       Setting this to ``False`` is slightly faster. Defaults to ``True``.
-                                       (For processing ignored tokens, use the ``lexer_callbacks`` options)
-
+``.
+                                      
     NOTE: A transformer without methods essentially performs a non-memoized deepcopy.
 """
 abstract type Transformer end
 
+"""
+    visit_tokens (::Transformer) = true
+
+Should the transformer visit tokens in addition to rules.
+Setting this to false is an order of magnitude faster. Defaults to `true`.
+(For processing ignored tokens, use the ``lexer_callbacks`` options)
+"""
 visit_tokens(t::Transformer) = true
 
 #== Python decorator 

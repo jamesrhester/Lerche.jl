@@ -8,6 +8,7 @@ export Tree, Token, Interpreter,Transformer, visit_children, visit,transform
 export GrammarError, ParseError, UnexpectedToken, UnexpectedCharacters
 export UnexpectedInput
 export Lark
+export visit_tokens   #So users can override default trait for Transformers
 export @inline_rule, @rule
 #==
 

@@ -11,20 +11,34 @@ See also 'Notes for Lark users' below.
 
 Lerche reads Lark EBNF grammars to produce a parser. This parser, when
 provided with text conforming to the grammar, produces a parse
-tree. This tree can be visited and transformed using "rules", which
-are just Julia methods. The first argument of a rule is an object
-which is a subtype of ``Visitor`` or ``Transformer``. The name of a
-rule is the production that it should be called on.
+tree. This tree can be visited and transformed using "rules". A rule is
+a function named after the production it should be called on, and
+first argument of a rule is an object which is a subtype of
+``Visitor`` or ``Transformer``.
 
+Given an EBNF grammar, it can be used to parse text into your data
+structure as follows:
 1. Define one or more subtypes of ``Transformer`` or ``Visitor`` to be
-used to dispatch the appropriate rule. The subtype can also be used to
-hold information if you wish, and must be a concrete type at present.
+passed as a first argument to the appropriate rule. The subtype can also be used to
+hold information during transformation if you wish, in which case it must be a concrete type.
+1. Define `visit_tokens(t::MyNewType) = false`. This is currently an order of magnitude faster
+than leaving the default `true`.
 1. For every production in your grammar that you wish to transform,
 write a rule with identical name to the production
 1. The rule should be prefixed with ``@rule`` if the second argument
 is an array containing all of the arguments to the grammar production
 1. The rule should be prefixed with ``@inline_rule`` if the second
 and following arguments refer to each argument in the grammar production
+
+If your grammar is in ``String`` variable ``mygrammar``, your text to be parsed and transformed
+is in ``String`` variable ``mytext``, and your ``Transformer`` subtype is ``MyTransformer``, the
+following commands will produce a data structure from the text:
+
+```julia
+p = Lark(mygrammar,parser="lalr",lexer="contextual") #create parser
+t = Lerche.parse(p,mytext)     #Create parse tree
+x = Lerche.transform(MyTransformer(),t)  #transform parse tree
+```
 
 For a real-world example of usage, see [this file](https://github.com/jamesrhester/DrelTools.jl/blob/master/src/jl_transformer.jl).
 
@@ -164,16 +178,23 @@ of correctly-constructed grammars.
 exception type hierarchy, as these are the only types that can have
 contents. Thus an "UnexpectedInput" exception must become e.g 
 an UnexpectedCharacter if a message is included.
+4. The `PuppetParser` invoked when there is a parse error is not yet
+functional
 
 # Implementation notes
 
-Lerche is currently noticeably slower than Lark, despite the
-advantages of Julia's compilation. There is still plenty of room for
-improvement as no effort has been made to use Julia efficiency tricks.
-The priority has been on maintaining fidelity with Lark.
-
-Python "yield" has been implemented using Julia Channels.
+Lerche is currently based off Lark 0.11.1. The priority has been on
+maintaining fidelity with Lark. For example, global `regex` flags
+which are integers in Lark are still integers in Lerche, which means
+you will need to look their values up. This may be changed to a more
+Julian approach in future.
 
 The @rule and @inline_rule macros define methods of Lerche function
 `transformer_func`. Julia multiple dispatch is used to select the
 appropriate method at runtime.
+
+Parsing a large (500K) file suggest Lerche is about 3 times faster
+than Lark for parsing. Parser generation is much slower as no
+optimisation techniques have been applied (yet). It is therefore 
+suggested that parsers are pre-generated and stored using the Julia
+``Serialization`` library.

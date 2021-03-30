@@ -19,6 +19,10 @@ const _lark_defaults = Dict([
     ])
 
 """
+    LarkOptions(options_dict)
+
+`options_dict` contains options that can be set as follows:
+
         parser - Decides which parser engine to use, "earley" or "lalr". (Default: "lalr")
                  Note: "lalr" requires a lexer
 
