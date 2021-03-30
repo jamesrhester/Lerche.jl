@@ -749,10 +749,8 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
     end
     
     get_namespace_name(name,params) = begin
-        println("Namespace name for $name is...")
         if params !== nothing
             try
-                println("Param: $(params[name])")
                 return params[name]
             catch e
                 if !(e isa KeyError)
@@ -761,11 +759,9 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
             end
         end
         try
-            println("Alias: $(aliases[name].value)")
             return aliases[name].value
         catch e
             if e isa KeyError
-                println("Something with $namespace in it")
                 if name[1] == '_'
                     return "_$(namespace)__$(name[2:end])"
                 end
@@ -783,7 +779,6 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
             @assert symbol.type_ == "RULE"
             _, params, tree, options = imported_rules[symbol]
             params_map = Dict([p => (p[1]!='_' ? "$(namespace)__$p" : "_$(namespace)__$p") for p in params])
-            println("Params map is $params_map")
             for t in tree
                 for (i, c) in enumerate(t.children)
                     if c isa Token && c.type_ in ("RULE", "TERMINAL")
@@ -795,7 +790,6 @@ import_from_grammar_into_namespace(grammar,namespace,aliases) = begin
             push!(rule_defs,(get_namespace_name(symbol,params_map), params, tree, options))
         end
     end
-    println("Rule defs: $rule_defs")
     return term_defs, rule_defs
 end
 
@@ -1004,7 +998,6 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
             t = stmt.children[1]
             push!(ignore,t)
         elseif stmt.data == "import"
-            println("import statement is $stmt")
             if length(stmt.children) > 1
                 path_node, arg1 = stmt.children
             else
@@ -1059,14 +1052,11 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
     # import grammars
     for (dotted_path, ba) in imports
         base_path, aliases = ba
-        println("Dotted path is $dotted_path, type $(typeof(dotted_path))")
         grammar_path = joinpath([x.value for x in dotted_path...]...) * EXT
-        println("Grammar path is $grammar_path")
         g = import_grammar(gl, grammar_path, base_path=base_path, import_paths=import_paths)
         new_td, new_rd = import_from_grammar_into_namespace(g, join([x.value for x in dotted_path...],"__"), aliases)
 
         append!(term_defs,new_td)
-        println("Rule defs before new ones: $rule_defs")
         append!(rule_defs,new_rd)
     end
 
@@ -1173,7 +1163,6 @@ load_grammar(gl::GrammarLoader, grammar_text; grammar_name="<?>", import_paths=[
             end
         end
     end
-println("Types: $(typeof(rules)), $(typeof(term_defs)), $(typeof(ignore_names))")
     return Grammar(rules, term_defs, ignore_names)
 
 end

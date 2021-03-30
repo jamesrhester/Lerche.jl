@@ -45,7 +45,6 @@ end
 LALRParser(parser_conf;debug=false) = begin
     analysis = LALR_Analyzer(parser_conf,debug=debug)
     compute_lalr!(analysis)
-    println("Finished analysis")
     callbacks = parser_conf.callbacks
     parser = _Parser(analysis.parse_table,callbacks)
     LALRParser(analysis.parse_table,parser_conf,parser,debug)

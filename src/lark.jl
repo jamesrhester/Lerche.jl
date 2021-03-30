@@ -208,7 +208,6 @@ _prepare_callbacks(options,rules) = begin
     parser_class = get_frontend(options.parser,options.lexer)
     _callbacks = nothing
     if options.ambiguity != "forest"
-        println("Rules are $(typeof(rules)), value $rules")
         _parse_tree_builder = ParseTreeBuilder(rules,
                                                propagate_positions = options.propagate_positions,
                                                ambiguous = options.parser != "lalr" && options.ambiguity=="explicit",

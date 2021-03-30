@@ -144,7 +144,6 @@ end
 compute_lr0_states(l::LALR_Analyzer) = begin
     l.lr0_states = Set()
     cache = Dict()
-    println("lr0 start states: $(l.lr0_start_states)")
     step(state) = Channel() do state_chan
         _, unsat = classify_bool(state.closure,rp->is_satisfied(rp))
         d = classify(unsat,key=rp->next(rp))
@@ -168,8 +167,6 @@ compute_lr0_states(l::LALR_Analyzer) = begin
     end
     collect(bfs(values(l.lr0_start_states),step))
     #println("lr0_states after: $(l.lr0_states)")
-    println("lr0_states: $(length(l.lr0_states))")
-    println("lr0_rules_by_origin: $(length(l.lr0_rules_by_origin))")
 end
 
 compute_reads_relations(l::LALR_Analyzer) = begin
