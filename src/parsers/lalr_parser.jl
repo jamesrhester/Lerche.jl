@@ -6,13 +6,25 @@
 # Adapted to Julia by James Hester (2019)
 # Email : james.r.hester@gmail.com
 
+export feed_token!
+
 struct ParseConf
-    parse_table
-    start_state
-    end_state
-    states
-    callbacks
-    start
+    parse_table::ParseTable
+    start_state::Int64
+    end_state::Int64
+    states::Array{Dict{String,Tuple{Symbol,Any}},1}
+    callbacks::Dict{Rule,Function}
+    start::String
+end
+
+struct _Parser
+    parse_table::ParseTable
+    callbacks::Dict{Rule,Function}
+    debug::Bool
+end
+
+_Parser(parse_table,callbacks;debug=false) = begin
+    _Parser(parse_table,callbacks,debug)
 end
 
 ParseConf(parse_table,callbacks,start) = begin
@@ -24,9 +36,9 @@ ParseConf(parse_table,callbacks,start) = begin
 end
 
 struct LALRParser
-    _parse_table
+    _parse_table::ParseTable
     parser_conf::ParserConf
-    parser
+    parser::_Parser
     debug::Bool
 end
 
@@ -46,13 +58,13 @@ end
 
 struct ParserState
     parse_conf::ParseConf
-    state_stack::Stack{Any}
+    state_stack::Stack{Int64}
     value_stack::Stack{Any}
 end
 
 ParserState(parse_conf;state_stack=nothing,value_stack=nothing) = begin
     if state_stack === nothing
-        state_stack = Stack{Any}()
+        state_stack = Stack{Int64}()
         push!(state_stack,parse_conf.start_state)
     end
               
@@ -93,8 +105,7 @@ feed_token!(ps::ParserState,token;is_end=false) = begin
             push!(value_stack,token)
             return
         end
-        rule = arg
-        size = length(rule.expansion)
+        size = length(arg.expansion)::Int
         #println("Preparing to pop $size values")
         if size > 0
             s = grab!(value_stack,size)
@@ -104,10 +115,10 @@ feed_token!(ps::ParserState,token;is_end=false) = begin
         else
             s = []
         end
-        value = callbacks[rule](s)
+        value = callbacks[arg](s)
 
         #println("Reduced, value now $value")
-        _action, new_state = states[first(state_stack)][rule.origin.name]
+        _action, new_state = states[first(state_stack)][arg.origin.name]::Tuple{Symbol,Int64}
         @assert _action == :shift
         push!(state_stack,new_state)
         push!(value_stack,value)
@@ -115,16 +126,6 @@ feed_token!(ps::ParserState,token;is_end=false) = begin
             return first(value_stack)
         end
     end
-end
-
-struct _Parser
-    parse_table
-    callbacks
-    debug::Bool
-end
-
-_Parser(parse_table,callbacks;debug=false) = begin
-    _Parser(parse_table,callbacks,debug)
 end
 
 parse(p::_Parser,lexer::LexerThread,start::String; value_stack = nothing, state_stack=nothing) = begin

@@ -267,7 +267,7 @@ end
 
 
 struct TraditionalLexer <: Lexer
-    newline_types::Array{String}
+    newline_types::Array{String,1}
     ignore_types::Set{String}
     callback::Dict{String,Function}
     terminals::Array{TerminalDef}

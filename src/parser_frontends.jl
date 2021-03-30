@@ -101,7 +101,7 @@ LALR_ContextualLexer(lexer_conf,parser_conf;options=nothing) = begin
     debug = options !== nothing ? options.debug : false 
     parser = LALRParser(parser_conf,debug=debug)
     postlex = lexer_conf.postlex
-    states = Dict([idx=>collect(keys(t)) for (idx,t) in parser._parse_table.states])
+    states = Dict([i=>collect(keys(t)) for (i,t) in enumerate(parser._parse_table.states)])
     always_accept = postlex !== nothing ? postlex.always_accept : ()
     lexer = ContextualLexer(lexer_conf,states,always_accept=always_accept)
     LALR_ContextualLexer(lexer,lexer_conf,postlex,parser,parser_conf.start)

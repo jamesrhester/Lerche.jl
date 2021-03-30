@@ -21,18 +21,20 @@ struct Reduce <: Action end
 #const Reduce = Action("Reduce")
 ==#
 
+# States_convert matches integer state with a Set{RulePtr}, stored
+# for debugging purposes
+#
 struct ParseTable
-    states #::Dict{Set{RulePtr},Dict{String,Tuple{Symbol,Union{Rule,Set{RulePtr}}}}}
-    start_states
-    end_states
+    states::Array{Dict,1}
+    start_states::Dict{String,Int64}
+    end_states::Dict{String,Int64}
+    states_convert::Dict{Set{RulePtr},Int64}
 end
 
-# This was a class method in Python but there seem to be
-# no subclasses at the moment??
-from_ParseTable(parse_table) = begin
-    enum = collect(keys(parse_table.states))
+ParseTable(rawstates,start_states,end_states) = begin
+    enum = collect(keys(rawstates))
     state_to_idx = Dict((s=>i) for (i,s) in enumerate(enum))
-    int_states = Dict()
+    int_states = Array{Dict{String,Tuple{Symbol,Any}},1}(undef,length(rawstates))
     #==println("\nState table:")
     for s in keys(state_to_idx)
         print("\n$s")
@@ -40,17 +42,16 @@ from_ParseTable(parse_table) = begin
     end
     ==#
     
-    for (s,la) in parse_table.states
+    for (s,la) in rawstates
         la = Dict([(k=>if v[1] == :shift
                        (v[1],state_to_idx[v[2]])
                        else
                         v end) for (k,v) in la])
         int_states[state_to_idx[s] ] = la
     end
-
-    start_states = Dict([start=>state_to_idx[s] for (start,s) in parse_table.start_states])
-    end_states = Dict([start=>state_to_idx[s] for (start,s) in parse_table.end_states])
-    return ParseTable(int_states,start_states,end_states)
+    start_states = Dict([start=>state_to_idx[s] for (start,s) in start_states])
+    end_states = Dict([start=>state_to_idx[s] for (start,s) in end_states])
+    return ParseTable(int_states,start_states,end_states,state_to_idx)
 end
 
 # digraph and traverse, see The Theory and Practice of Compiler Writing
@@ -328,7 +329,7 @@ compute_lalr1_states(l::LALR_Analyzer) = begin
     end
 
     states = IdDict([k.closure => v for (k, v) in m ])
-    
+
     # compute end states
     end_states = Dict()
     for state in keys(states)
@@ -342,14 +343,8 @@ compute_lalr1_states(l::LALR_Analyzer) = begin
         end
     end
         
-    _parse_table = ParseTable(states, Dict([start=> state.closure for (start, state) in l.lr0_start_states]), end_states)
+    l.parse_table = ParseTable(states, Dict([start=> state.closure for (start, state) in l.lr0_start_states]), end_states)
 
-    if l.debug
-        l.parse_table = _parse_table
-    else
-        println("Integer states")
-        l.parse_table = from_ParseTable(_parse_table)
-    end
 end
 
 compute_lalr!(l::LALR_Analyzer) = begin
