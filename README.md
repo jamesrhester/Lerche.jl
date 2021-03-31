@@ -73,9 +73,9 @@ encodes a two-character sequence.  However, it corresponds to a single
 quote in the analogous Julia case. To obtain the two-character
 sequence in Julia, input ``\\"``. A backslash-quote sequence is
 required in Lark grammars when representing a double quote as the Lark
-grammar defines the sequence backslash-quote to represent a quote; so
-these two characters must remain in the string after Julia has 
-pre-processed it.
+grammar defines the sequence backslash-quote to represent a quote,
+just like Python; so these two characters must remain in the string
+after Julia has pre-processed it.
 
 3. While unicode escapes are recognised (``\uxxxx``), the Python
 ``\x`` combination to insert a particular byte value in the
@@ -176,12 +176,14 @@ of correctly-constructed grammars.
 2. Dynamic lexer is not implemented. 
 3. All errors with messages attached must be at the bottom of the
 exception type hierarchy, as these are the only types that can have
-contents. Thus an "UnexpectedInput" exception must become e.g 
-an UnexpectedCharacter if a message is included.
+contents. Thus an ``UnexpectedInput`` exception must become e.g 
+an ``UnexpectedCharacter`` exception if a message is included.
 4. The `PuppetParser` invoked when there is a parse error is not yet
 functional
 5. There may be issues with correctly interpreting import paths
 to find imported grammars: please raise an issue if this happens.
+6. No choice of ``regex`` engine, ``Tree`` structure or byte/string
+choices are available as they make no sense for Julia.
 
 # Implementation notes and hints
 
@@ -191,7 +193,7 @@ which are integers in Lark are still integers in Lerche, which means
 you will need to look their values up. This may be changed to a more
 Julian approach in future.
 
-The @rule and @inline_rule macros define methods of Lerche function
+The ``@rule`` and ``@inline_rule`` macros define methods of Lerche function
 `transformer_func`. Julia multiple dispatch is used to select the
 appropriate method at runtime.
 
