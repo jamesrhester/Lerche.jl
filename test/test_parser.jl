@@ -113,6 +113,13 @@ make_parser_test(lexer,parser) = begin
         @test x.data == "start" && x.children == ["12", "2"]
     end
 
+    @testset "Test unicode" begin
+        g = make_lark("""start: B A
+                         B: "♫♪"
+                         A: "♫" """)
+        x = Lerche.parse(g,"♫♪♫")
+    end
+    
     @testset "EBNF stack depth" begin
         g = make_lark("""start: a+
                          a : "a" """)

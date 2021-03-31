@@ -482,7 +482,7 @@ _literal_to_pattern(literal) = begin
     end
     v = v[1:flag_start-1]
     @assert v[1] == v[end] && occursin(v[1], "\"/")
-    x = v[2:end-1]   #drop delimiters
+    x = v[2:prevind(v,end,1)]   #drop delimiters
     ### TODO fix escaping
     s = _fix_escaping(x)
     if literal.type_ == "STRING"

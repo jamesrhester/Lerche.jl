@@ -314,7 +314,7 @@ end
 
 next_token(tl::TraditionalLexer,lex_state) = begin
     line_ctr = lex_state.line_ctr
-    #println("Pos: $(line_ctr.char_pos), remaining text\n"*lex_state.text[line_ctr.char_pos:end]*"EOF")
+    #println("Pos: $(line_ctr.char_pos) out of $(lex_state.text_length), remaining text\n"*lex_state.text[line_ctr.char_pos:end]*"EOF")
     while line_ctr.char_pos <= lex_state.text_length
         res = match(tl,lex_state.text,line_ctr.char_pos)
         if res === nothing
@@ -360,7 +360,7 @@ mutable struct LexerState
 end
 
 LexerState(text,line_ctr;last_token=nothing) = begin
-    LexerState(text,line_ctr,last_token,length(text))
+    LexerState(text,line_ctr,last_token,ncodeunits(text))
 end
 
 struct ContextualLexer <: Lexer

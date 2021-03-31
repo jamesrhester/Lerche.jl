@@ -84,7 +84,7 @@ feed_token!(ps::ParserState,token;is_end=false) = begin
         arg = nothing  #create outside scope of try
         action = nothing # ditto
         state = first(state_stack)
-        #println("State $state, current token $token")
+        #println("State $state, current token $(token.type_) ($token)")
         try
             #println("Possibles: $(keys(states[state]))\n")
             action,arg = states[state][token.type_]
