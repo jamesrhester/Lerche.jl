@@ -51,25 +51,8 @@ include("precompile.jl")
 
 @warnpcfail _precompile_()
 
-# Prepare the Lark EBNF parser
-have_cache = false
-storage = joinpath(@__DIR__,"..","deps","lark_grammar_serialised.jli")
-try
-    Base.open(storage,"r")
-    global have_cache=true
-catch e
-    println("$e")
-    println("Failed to load stored grammar, regenerating")
-end
-
-if have_cache
-    println("Loading Lark grammar from $storage")
-    const _lark_grammar_f, _lark_grammar_t = Serialization.deserialize(storage)
-else
-    const _lark_grammar_f = GrammarLoader(false)
-    const _lark_grammar_t = GrammarLoader(true)
-    Serialization.serialize(storage,(_lark_grammar_f,_lark_grammar_t))
-end
+const _lark_grammar_f = GrammarLoader(false)
+const _lark_grammar_t = GrammarLoader(true)
 
 #load_grammar(text::String;options...) = load_grammar(_lark_grammar,text;options...)
 
