@@ -2,7 +2,6 @@ module Lerche
 
 using DataStructures  #For Stack when parsing
 using Logging         #Because Lark does
-using Serialization   #To pre-generate grammar
 
 export Tree, Token, Interpreter,Transformer, visit_children, visit,transform
 export GrammarError, ParseError, UnexpectedToken, UnexpectedCharacters

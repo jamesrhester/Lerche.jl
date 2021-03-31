@@ -186,7 +186,7 @@ macro rule(s)
         error("Type must be included in the first argument to define a rule: $s")
     end
     rule_type = s.args[1].args[2].args[2] # the type name
-    println("Rule name: $rule_name, Rule type $rule_type")
+    @debug "Rule name: $rule_name, Rule type $rule_type"
     esc(quote
         Lerche.transformer_func($(s.args[1].args[2]),::Val{$rule_name},meta::Lerche.Meta,$(s.args[1].args[3])) = $(s.args[2])
     end )
@@ -205,8 +205,8 @@ macro inline_rule(s)
     end    
     rule_name = QuoteNode(s.args[1].args[1])
     rule_type = s.args[1].args[2].args[2] # the type name
-    println("Inline rule name: $rule_name, Rule type $rule_type")
-    println("Args $(s.args[1].args)")
+    @debug "Inline rule name: $rule_name, Rule type $rule_type"
+    @debug "Args $(s.args[1].args)"
     esc(quote
         Lerche.transformer_func(x::$rule_type,y::Val{$rule_name},meta::Lerche.Meta,z::Array) = Lerche.transformer_func(x,y,z...) 
         Lerche.transformer_func($(s.args[1].args[2]),::Val{$rule_name},$(s.args[1].args[3:end]...)) = $(s.args[2])

@@ -180,8 +180,10 @@ contents. Thus an "UnexpectedInput" exception must become e.g
 an UnexpectedCharacter if a message is included.
 4. The `PuppetParser` invoked when there is a parse error is not yet
 functional
+5. There may be issues with correctly interpreting import paths
+to find imported grammars: please raise an issue if this happens.
 
-# Implementation notes
+# Implementation notes and hints
 
 Lerche is currently based off Lark 0.11.1. The priority has been on
 maintaining fidelity with Lark. For example, global `regex` flags
@@ -195,6 +197,7 @@ appropriate method at runtime.
 
 Parsing a large (500K) file suggest Lerche is about 3 times faster
 than Lark for parsing. Parser generation is much slower as no
-optimisation techniques have been applied (yet). It is therefore 
-suggested that parsers are pre-generated and stored using the Julia
-``Serialization`` library.
+optimisation techniques have been applied (yet). Calculating and
+storing your grammar in a Julia `const` variable at the top level 
+of your package will allow it to be precompiled and thus avoid
+grammar re-analysis each time your package is loaded.
