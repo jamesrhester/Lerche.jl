@@ -1,6 +1,12 @@
+#==
+Note this is a straight translation of the Lark
+equivalent file and has not been tested or
+simplified for Julia
+==#
+
 abstract type ParserPuppet end
 
-struct NormalParserPuppet
+struct NormalParserPuppet <: ParserPuppet
     parser
     parser_state
     lexer_state
@@ -10,7 +16,7 @@ end
 # result in a class variable so it can be
 # hashed. I don't think we have this issue
 # in Julia.
-struct ImmutableParserPuppet
+struct ImmutableParserPuppet <: ParserPuppet
     parser
     parser_state
     lexer_state
@@ -48,7 +54,7 @@ accepts(p::ParserPuppet) = begin
         if isupper(t)
             new_puppet = copy(p)
             try
-                feed_token(new_puppet,Token(t,''))
+                feed_token(new_puppet,Token(t,""))
             catch e
                 if e isa UnexpectedToken
                     continue
