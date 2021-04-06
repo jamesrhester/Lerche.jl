@@ -12,22 +12,22 @@ See also 'Notes for Lark users' below.
 Lerche reads Lark EBNF grammars to produce a parser. This parser, when
 provided with text conforming to the grammar, produces a parse
 tree. This tree can be visited and transformed using "rules". A rule is
-a function named after the production it should be called on, and
-first argument of a rule is an object which is a subtype of
+a function named after the production whose arguments it should be called on, and
+the first argument of a rule is an object which is a subtype of
 ``Visitor`` or ``Transformer``.
 
 Given an EBNF grammar, it can be used to parse text into your data
 structure as follows:
-1. Define one or more subtypes of ``Transformer`` or ``Visitor`` to be
-passed as a first argument to the appropriate rule. The subtype can also be used to
-hold information during transformation if you wish, in which case it must be a concrete type.
+1. Define one or more subtypes of ``Transformer`` or ``Visitor`` instances of which will be
+passed as the first argument to the appropriate rule. The instance can also be used to
+hold information during transformation if you wish, in which case it must have a concrete type.
 1. Define `visit_tokens(t::MyNewType) = false`. This is currently an order of magnitude faster
 than leaving the default `true`.
-1. For every production in your grammar that you wish to transform,
+1. For every production in your grammar that you wish to process,
 write a rule with identical name to the production
-1. The rule should be prefixed with ``@rule`` if the second argument
+1. The rule should be prefixed with macro ``@rule`` if the second argument
 is an array containing all of the arguments to the grammar production
-1. The rule should be prefixed with ``@inline_rule`` if the second
+1. The rule should be prefixed with macro ``@inline_rule`` if the second
 and following arguments refer to each argument in the grammar production
 
 If your grammar is in ``String`` variable ``mygrammar``, your text to be parsed and transformed
@@ -49,7 +49,7 @@ programs written in Python to Lerche programs written in Julia, the
 changes outlined below are necessary.
 
 1. All Transformer and Visitor classes become types
-1. All class method calls become Julia method calls with the type as the first argument
+1. All class method calls become Julia method calls with an instance of the type as the first argument
 (i.e. replacing ``self``)
 1. Transformation or visitor rules should be preceded by the ``@rule`` macro. Inline
 rules use the ``@inline_rule`` macro. 
