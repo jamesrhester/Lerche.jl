@@ -55,7 +55,11 @@ _parse(pf::_ParserFrontend,start,input,args...) = begin
         end
         start = start[]
     end
-    parse(pf.parser,input, start,args...)
+    p = parse(pf.parser,input, start,args...)
+    if pf.after_transform !== nothing
+        return transform(pf.after_transform,p)
+    end
+    return p
 end
 
 make_lexer(wl::WithLexer,text) = begin
@@ -78,6 +82,7 @@ struct LALR_TraditionalLexer <: LALR_WithLexer
     postlex
     parser
     start
+    after_transform
 end
 
 LALR_TraditionalLexer(lexer_conf,parser_conf;options=nothing) = begin
@@ -85,7 +90,8 @@ LALR_TraditionalLexer(lexer_conf,parser_conf;options=nothing) = begin
     LALR_TraditionalLexer(TraditionalLexer(lexer_conf), lexer_conf,
                           lexer_conf.postlex,
                           LALRParser(parser_conf,debug=debug),
-                          parser_conf.start
+                          parser_conf.start,
+                          options !== nothing ? options.transformer : nothing
                           )
 end
 
@@ -95,6 +101,7 @@ struct LALR_ContextualLexer <: LALR_WithLexer
     postlex
     parser
     start
+    after_transform
 end
 
 LALR_ContextualLexer(lexer_conf,parser_conf;options=nothing) = begin
@@ -104,7 +111,8 @@ LALR_ContextualLexer(lexer_conf,parser_conf;options=nothing) = begin
     states = Dict([i=>collect(keys(t)) for (i,t) in enumerate(parser._parse_table.states)])
     always_accept = postlex !== nothing ? postlex.always_accept : ()
     lexer = ContextualLexer(lexer_conf,states,always_accept=always_accept)
-    LALR_ContextualLexer(lexer,lexer_conf,postlex,parser,parser_conf.start)
+    LALR_ContextualLexer(lexer,lexer_conf,postlex,parser,parser_conf.start,
+                         options !== nothing ? options.transformer : nothing)
 end
 
 init_contextual_lexer(p::WithLexer,lexer_conf) = begin

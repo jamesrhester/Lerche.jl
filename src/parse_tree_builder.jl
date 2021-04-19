@@ -316,6 +316,10 @@ end
 # the appropriate transformer to call, for later application.
 # We have to supply a dummy "nothing" argument for meta.
 
+# TODO: integrate transformer callbacks into the callback chain
+# while retaining type stability. Probably requires transformers
+# to be user-typed
+
 create_callback(ptb::ParseTreeBuilder;transformer=nothing) = begin
     callbacks = Dict()
     i = 0

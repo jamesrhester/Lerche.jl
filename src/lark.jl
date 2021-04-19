@@ -187,7 +187,7 @@ Lark(grammar::String,loptions,source,cache_file) = begin
                 end
             end
         end
-        lexer_callbacks = options.transformer !== nothing ? _get_lexer_callbacks(options.transformer,terminals) : Dict()
+        lexer_callbacks = Dict() #options.transformer !== nothing ? _get_lexer_callbacks(options.transformer,terminals) : Dict()
         merge!(lexer_callbacks,options.lexer_callbacks)
         lexer_conf = LexerConf(terminals,ignore=ignore_tokens,postlex=options.postlex,
                                callbacks=lexer_callbacks,
@@ -208,6 +208,7 @@ Lark(grammar::String,loptions,source,cache_file) = begin
     end
 end
 
+#TODO: integrate transformer calls into create_callback
 _prepare_callbacks(options,rules) = begin
     parser_class = get_frontend(options.parser,options.lexer)
     _callbacks = nothing
@@ -216,7 +217,7 @@ _prepare_callbacks(options,rules) = begin
                                                propagate_positions = options.propagate_positions,
                                                ambiguous = options.parser != "lalr" && options.ambiguity=="explicit",
                                                maybe_placeholders=options.maybe_placeholders)
-        _callbacks = create_callback(_parse_tree_builder,transformer=options.transformer)
+        _callbacks = create_callback(_parse_tree_builder) #,transformer=options.transformer)
     end
     return parser_class,_callbacks
 end
