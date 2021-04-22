@@ -21,33 +21,10 @@ const _lark_defaults = Dict([
 """
     LarkOptions(options_dict)
 
-`options_dict` contains options that can be set as follows:
+A LarkOptions instance contains options for running Lark. Options can be accessed both
+as a traditional dictionary and as properties using dot notation. The possible options are
+described under the Lark constructor.
 
-        parser - Decides which parser engine to use, "earley" or "lalr". (Default: "lalr")
-                 Note: "lalr" requires a lexer
-
-        lexer - Decides whether or not to use a lexer stage
-            "standard": Use a standard lexer
-            "contextual": Stronger lexer (only works with parser="lalr")
-            "dynamic": Flexible and powerful (only with parser="earley")
-            "dynamic_complete": Same as dynamic, but tries *every* variation
-                                of tokenizing possible. (only with parser="earley")
-            "auto" (default): Choose for me based on grammar and parser
-
-        ambiguity - Decides how to handle ambiguity in the parse. Only relevant if parser="earley"
-            "resolve": The parser will automatically choose the simplest derivation
-                       (it chooses consistently: greedy for tokens, non-greedy for rules)
-            "explicit": The parser will return all derivations wrapped in "_ambig" tree nodes (i.e. a forest).
-
-        transformer - Applies the transformer to every parse tree
-        debug - Affects verbosity (default: False)
-        keep_all_tokens - Don't automagically remove "punctuation" tokens (default: False)
-        cache_grammar - Cache the Lark grammar (Default: False)
-        postlex - Lexer post-processing (Requires standard lexer. Default: None)
-        start - The start symbol (Default: start)
-        profile - Measure run-time usage in Lark. Read results from the profiler proprety (Default: False)
-        propagate_positions - Propagates [line, column, end_line, end_column] attributes into all tree branches.
-        lexer_callbacks - Dictionary of callbacks for the lexer. May alter tokens during lexing. Use with caution.
 """
 struct LarkOptions
     options_dict::Dict
@@ -109,18 +86,62 @@ end
 const VALID_PRIORITY_OPTIONS = ("auto", "normal", "invert", nothing)
 const VALID_AMBIGUITY_OPTIONS = ("auto", "resolve", "explicit", "forest")
 
-Lark(grammar::IOStream,source;options...) = begin
-    cache_file = "larkcache_$(basename(source))"
-    textgrammar = read(grammar,String)
-    Lark(textgrammar,Dict{String,Any}((String(k),v) for (k,v) in options),source,cache_file)
-end
+"""
+    Lark(grammar::String;options...)
 
+Create a Lark parser based on the Lark grammar expressed in `grammar`. Options are as
+follows:
+
+  * `parser` Decides which parser engine to use, "earley" or "lalr". (Default: "lalr")
+         Note: "lalr" requires a lexer. "earley" is not currently implemented.
+
+  * `lexer` Decides whether or not to use a lexer stage
+
+     + "standard": Use a standard lexer
+
+     + "contextual": Stronger lexer (only works with parser="lalr")
+
+     + "auto" (default): Choose for me based on grammar and parser
+
+  * `transformer` - Applies the transformer to every parse tree
+
+  * `debug` - Affects verbosity (default: False)
+
+  * `keep_all_tokens` - Don't automagically remove "punctuation" tokens (default: False)
+
+  * `postlex` - Lexer post-processing (Requires standard lexer. Default: None)
+
+  * `start` - The start symbol (Default: start)
+
+  * `propagate_positions` - Propagates [line, column, end line, end column] attributes into all tree branches.
+
+  * `lexer_callbacks` - Dictionary of callbacks for the lexer. May alter tokens during lexing. Use with caution.
+"""
 Lark(grammar::String;options...) = begin
     source = "<string>"
     cache_file = "larkcache__$(hash(grammar)%(2^32))"
     Lark(grammar,Dict{String,Any}((String(k),v) for (k,v) in options),source,cache_file)
 end
 
+"""
+    Lark(grammar::IOStream,source;options...)
+
+Create a Lark parser based on the Lark grammar found by reading `grammar`, whose source
+is recorded as `source`. See above for options.
+"""
+Lark(grammar::IOStream,source;options...) = begin
+    cache_file = "larkcache_$(basename(source))"
+    textgrammar = read(grammar,String)
+    Lark(textgrammar,Dict{String,Any}((String(k),v) for (k,v) in options),source,cache_file)
+end
+
+"""
+       Lark(grammar::String,loptions,source,cache_file)
+
+Create a Lark parser based on the Lark grammar contained in `grammar`, using options
+found in dictionary `loptions`, recording the source as `source` and storing the parser information
+in `cache_file`. `cache_file` is currently ignored. 
+"""
 Lark(grammar::String,loptions,source,cache_file) = begin
     options = LarkOptions(loptions)
     if options.lexer == "auto"
@@ -228,6 +249,13 @@ _build_parser(options,rules,lexer_conf) = begin
     return parser_class(lexer_conf,parser_conf,options=options)
 end
 
+"""
+    open(grammar_filename;rel_to=nothing,options...)
+    
+Open `grammar_filename` and read in a Lark grammar, returning a Lark parser. If
+`rel_to` is not `nothing`, `grammar_filename` is relative to `rel_to`. Options
+are the same as for [`Lark(grammar::String;options...)`](@ref).
+"""
 open(grammar_filename;rel_to=nothing,options...) = begin
     if rel_to != nothing
         basepath = dirname(rel_to)
@@ -250,6 +278,13 @@ end
 
 get_terminal(l::Lark,name) = l._terminals_dict[name]
 
+"""
+    parse(l::Lark,text;start=nothing,on_error=nothing)
+
+Parse `text` using parser `l`, returning a parse tree. If `start` is
+not nothing, it identifies the start symbol. `on_error` is currently
+ignored.
+"""
 parse(l::Lark,text;start=nothing,on_error=nothing) = begin
     try
         parse(l.parser,text,start=start)

@@ -1,34 +1,32 @@
-"""Transformers visit each node of the tree, and run the appropriate method on it according to the node's data.
 
-    The methods (provided by the user) are dispatched according to the type and ``tree.data``.
-    The returned value replaces the old one in the structure.
+"""
+Transformers visit each node of the tree, and run the appropriate
+method on it according to the node's data.
 
-    They work bottom-up (or depth-first), starting with the leaves and ending at the root of the tree.
-    Transformers can be used to implement map & reduce patterns. Because nodes are reduced from leaf to root,
-    at any point the callbacks may assume the children have already been transformed (if applicable).
+The methods (provided by the user) are dispatched according to the
+type and the node's grammar rule. The returned value replaces the old
+one in the structure.
 
-    ``Transformer`` can do anything ``Visitor`` can do, but because it reconstructs the tree,
-    it is slightly less efficient. It can be used to implement map or reduce patterns.
+They work bottom-up (or depth-first), starting with the leaves and
+ending at the root of the tree.  Transformers can be used to
+implement map - reduce patterns. Because nodes are reduced from
+leaf to root, at any point the callbacks may assume the children
+have already been transformed (if applicable).
 
-    All these classes implement the transformer interface:
+`Transformer` can do anything `Visitor` can do, but because it
+reconstructs the tree, it is slightly less efficient.
 
-    - ``Transformer`` - Recursively transforms the tree. This is the one you probably want.
-    - ``Transformer_InPlace`` - Non-recursive. Changes the tree in-place instead of returning new instances
-    - ``Transformer_InPlaceRecursive`` - Recursive. Changes the tree in-place instead of returning new instances
-
-Traits: 
-``.
-                                      
-    NOTE: A transformer without methods essentially performs a non-memoized deepcopy.
+NOTE: A transformer without methods essentially performs a non-memoized deepcopy.
 """
 abstract type Transformer end
 
 """
-    visit_tokens (::Transformer) = true
+    visit_tokens(t::Transformer)
 
-Should the transformer visit tokens in addition to rules.
-Setting this to false is an order of magnitude faster. Defaults to `true`.
-(For processing ignored tokens, use the ``lexer_callbacks`` options)
+Should the transformer visit tokens in addition to rules.  Setting
+this to false is an order of magnitude faster. For consistency with
+Lark Defaults to `true`.  (For processing ignored tokens, use the
+``lexer_callbacks`` options)
 """
 visit_tokens(t::Transformer) = true
 
@@ -70,7 +68,18 @@ list of children is supplied.
 We can duplicate this with macros, if we want.
 ==#
 
+"""
+    Transformer_InPlace
+
+Non-recursive `Transformer`. Changes the tree in-place instead of returning new instances
+"""
 abstract type Transformer_InPlace <: Transformer end
+
+"""
+    Transformer_InPlaceRecursive
+
+Recursive. Changes the tree in-place instead of returning new instances.
+"""
 abstract type Transformer_InPlaceRecursive <: Transformer end
 
 """
@@ -146,7 +155,12 @@ _transform_tree(t::Transformer,tree) = begin
     return _call_userfunc(t,tree,new_children=children)
 end
 
-# This is overridden by subtypes
+"""
+    transform(tr::Transformer,tree)
+
+Transform parse tree `tree` according to rules defined for type `tr`.
+Typically `tr` is a subtype of `Transformer`.
+"""
 transform(tr::Transformer,tree) = _transform_tree(tr,tree)
 
 Base.:*(t1::Transformer,t2::Transformer) = TransformerChain([t1,t2])
@@ -237,13 +251,30 @@ end
 
 abstract type VisitorBase end
 
+"""
+    Visitor
+
+User-defined methods called with an instance of a subtype of Visitor will visit
+each node of the parse tree in top-down order without altering it or returning 
+a transformed tree.
+"""
 abstract type Visitor <: VisitorBase end
+
+"""
+    When called by `visit`, subtypes of `Visitor_Recursive` visit nodes of the parse tree
+    in bottom-up order. 
+"""
 abstract type Visitor_Recursive <: VisitorBase end
 
 _call_userfunc(v::VisitorBase,tree) = transformer_func(v,Val{Symbol(tree.data)}(),Meta(),tree)
 
 transformer_func(v::VisitorBase,::Val,tree) = tree
 
+"""
+    visit(v::Visitor,tree)
+
+Visit each node of `tree`, calling methods defined for `v` on each node.
+"""
 visit(v::Visitor,tree) = begin
     for subtree in tree
         _call_userfunc(v,subtree)
@@ -278,8 +309,10 @@ visit_topdown(v::Visitor_Recursive,tree) = begin
     return tree
 end
 
-# Interpreters do not automatically visit children
-
+"""
+    Subtypes of the `Interpreter` type do not automatically visit children
+    of the parse tree node when called by `visit`.
+"""
 abstract type Interpreter end
 
 """

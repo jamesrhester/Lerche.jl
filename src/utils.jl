@@ -172,11 +172,14 @@ Base.values(d::DefaultDict) = values(d.d)
 Base.iterate(d::DefaultDict) = Base.iterate(d.d)
 Base.iterate(d::DefaultDict,s) = Base.iterate(d.d,s)
 Base.length(d::DefaultDict) = Base.length(d.d)
-"""
-Flag that the following method is a rule. Usage: @rule rule_name(t::Type,args) = begin .... end.
-There can only be one argument after the type argument, which will be the tree children.
-"""
 
+"""
+    @rule s
+
+`s` is a function `rule_name(t,args)` where `t` is an instance of a subtype of
+`Transformer` or `Visitor`. `args` is an array holding values for each node of
+the grammar production.
+"""
 macro rule(s)
     if s.head != :(=) || s.args[1].head != :call
         error("A rule must be a function definition")
@@ -193,12 +196,14 @@ macro rule(s)
 end
    
 """
-Flag that the following is an inline rule, that is, that
-its arguments should be splatted when called.
+    @inline_rule s
 
-TODO: splice in the results of rule(s) instead of rewriting it.
+`s` is a function of the form `rule_name(t,args...)` where `rule_name` is the
+name of a grammar rule and `args` are values for the individual elements of that
+rule's grammar production. This rule is called by `transform(t,tree)`
+and `visit(v,tree)`. `t` is a subtype of `Transformer` and v is a
+subtype of `Visitor`.
 """
-
 macro inline_rule(s)
     if s.head != :(=) || s.args[1].head != :call
         error("A rule must be a function definition")

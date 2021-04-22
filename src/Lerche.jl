@@ -3,7 +3,8 @@ module Lerche
 using DataStructures  #For Stack when parsing
 using Logging         #Because Lark does
 
-export Tree, Token, Interpreter,Transformer, visit_children, visit,transform
+export Tree, Token, Interpreter,Visitor,Transformer, visit_children, visit,transform
+export Transformer_InPlace, Transformer_InPlaceRecursive,Visitor_Recursive
 export GrammarError, ParseError, UnexpectedToken, UnexpectedCharacters
 export UnexpectedInput
 export Lark
