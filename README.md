@@ -1,9 +1,13 @@
-![Testing](https://github.com/jamesrhester/Lerche.jl/workflows/Tests/badge.svg)
+![Testing](https://github.com/jamesrhester/Lerche.jl/workflows/CI/badge.svg)
 [![Coverage Status](https://coveralls.io/repos/github/jamesrhester/Lerche.jl/badge.svg?branch=master)](https://coveralls.io/github/jamesrhester/Lerche.jl?branch=master)
 # Introduction
 
 Lerche (German for Lark) is a partial port of the Lark grammar processor from
 Python to Julia.  Lark grammars should work unchanged in Lerche.
+
+**Installation**: at the Julia REPL, `using Pkg; Pkg.add("Lerche")`
+
+**Documentation**: [![][docs-stable-img]][docs-stable-url] [![][docs-latest-img]][docs-latest-url]
 
 # Quick start
 
@@ -203,3 +207,9 @@ optimisation techniques have been applied (yet). Calculating and
 storing your grammar in a Julia `const` variable at the top level 
 of your package will allow it to be precompiled and thus avoid
 grammar re-analysis each time your package is loaded.
+
+[docs-latest-img]: https://img.shields.io/badge/docs-latest-blue.svg
+[docs-latest-url]: http://jamesrhester.github.io/Lerche.jl/latest/
+
+[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
+[docs-stable-url]: http://jamesrhester.github.io/Lerche.jl/stable/
