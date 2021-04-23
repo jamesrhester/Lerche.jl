@@ -209,7 +209,7 @@ of your package will allow it to be precompiled and thus avoid
 grammar re-analysis each time your package is loaded.
 
 [docs-latest-img]: https://img.shields.io/badge/docs-latest-blue.svg
-[docs-latest-url]: http://jamesrhester.github.io/Lerche.jl/latest/
+[docs-latest-url]: http://jamesrhester.github.io/Lerche.jl/dev/
 
 [docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
 [docs-stable-url]: http://jamesrhester.github.io/Lerche.jl/stable/
