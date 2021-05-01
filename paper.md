@@ -29,6 +29,8 @@ standard for describing the syntax of such structured text [@ebnf].  A
 useful subset of such grammars is known as `LALR(1)`, meaning that the
 grammars describe text that can be unambiguously parsed based
 only on the tokens already seen and the next token of input [@lalr].
+LALR(1) stands out for being able to parse most programming languages,
+while guaranteeing O(n) run-time complexity and very light memory use.
 Julia package `Lerche` automatically generates a parser that processes
 any data file or domain-specific language that can be described using
 a LALR(1) EBNF. The parse tree can be immediately transformed into
@@ -92,5 +94,16 @@ more than one type of token; for example, a keyword may also be a
 possible value for a plain sequence of characters in certain contexts,
 in which case a non-contextual lexer might wrongly fail to recognise
 the keyword.
+
+Lark/Lerche grammars extend the EBNF standard in several ways. To aid in
+composability, they support templating, and importing rules and terminals
+from other grammars. To aid in refactoring, they support expressing rule
+semantics, which are translatable to common tree operations. For example,
+rules starting with `_` are considered to be auxiliary, and don't produce
+their own node. Terminals starting with `_` aren't included in the tree,
+which is often desired for punctation such as commas and parentheses. 
+In order to resolve possible ambiguities or conflicts, there is support
+for specifying priority in terminals and rules.
+
 
 # References
