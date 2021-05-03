@@ -181,18 +181,22 @@ Base.length(d::DefaultDict) = Base.length(d.d)
 the grammar production.
 """
 macro rule(s)
-    if s.head != :(=) || s.args[1].head != :call
-        error("A rule must be a function definition")
-    end    
-    rule_name = QuoteNode(s.args[1].args[1])
-    if s.args[1].args[2].head != :(::)
+    if s.head != :(=) || !(s.args[1].head in(:call,:where))
+        error("A rule must be a function definition, got $(s.head)")
+    end
+    c_expr = s.args
+    while c_expr[1].head == :where
+        c_expr = c_expr[1].args
+    end
+    rule_name = QuoteNode(c_expr[1].args[1])
+    if c_expr[1].args[2].head != :(::)
         error("Type must be included in the first argument to define a rule: $s")
     end
-    rule_type = s.args[1].args[2].args[2] # the type name
+    rule_type = c_expr[1].args[2].args[2] # the type name
     @debug "Rule name: $rule_name, Rule type $rule_type"
-    esc(quote
-        Lerche.transformer_func($(s.args[1].args[2]),::Val{$rule_name},meta::Lerche.Meta,$(s.args[1].args[3])) = $(s.args[2])
-    end )
+    c_expr[1] = :(Lerche.transformer_func($(c_expr[1].args[2]),::Val{$rule_name},meta::Lerche.Meta,$(c_expr[1].args[3])))
+    @debug "$s"
+    esc(quote $s end)
 end
    
 """
@@ -205,17 +209,31 @@ and `visit(v,tree)`. `t` is a subtype of `Transformer` and v is a
 subtype of `Visitor`.
 """
 macro inline_rule(s)
-    if s.head != :(=) || s.args[1].head != :call
+    if s.head != :(=) || !(s.args[1].head in (:call,:where))
         error("A rule must be a function definition")
-    end    
-    rule_name = QuoteNode(s.args[1].args[1])
-    rule_type = s.args[1].args[2].args[2] # the type name
+    end
+    c_expr = s.args
+    while c_expr[1].head == :where
+        c_expr = c_expr[1].args
+    end
+    rule_name = QuoteNode(c_expr[1].args[1])
+    rule_type = c_expr[1].args[2].args[2] # the type name
     @debug "Inline rule name: $rule_name, Rule type $rule_type"
-    @debug "Args $(s.args[1].args)"
+    @debug "Args $(c_expr.args)"
+    #== esc(quote
+    Lerche.transformer_func(x::$rule_type,y::Val{$rule_name},meta::Lerche.Meta,z::Array) = Lerche.transformer_func(x,y,z...) 
+    Lerche.transformer_func($(s.args[1].args[2]),::Val{$rule_name},$(s.args[1].args[3:end]...)) = $(s.args[2])
+    end) ==#
+    
+    c_expr[1] = :(Lerche.transformer_func($(c_expr[1].args[2]),::Val{$rule_name},$(c_expr[1].args[3:end]...)))
+    #== esc(quote
+        Lerche.transformer_func(x::$rule_type,y::Val{$rule_name},meta::Lerche.Meta,z::Array) = Lerche.transformer_func(x,y,z...)
+    ==#
+    @debug "$s"
     esc(quote
-        Lerche.transformer_func(x::$rule_type,y::Val{$rule_name},meta::Lerche.Meta,z::Array) = Lerche.transformer_func(x,y,z...) 
-        Lerche.transformer_func($(s.args[1].args[2]),::Val{$rule_name},$(s.args[1].args[3:end]...)) = $(s.args[2])
-    end)
+        Lerche.transformer_func(x::$rule_type,y::Val{$rule_name},meta::Lerche.Meta,z::Array) = Lerche.transformer_func(x,y,z...);
+        $s
+        end)
 end
 
 """
