@@ -24,8 +24,8 @@ bibliography: paper.bib
 
 In a scientific context, structured text is commonly encountered in
 data files and domain-specific languages (DSLs) for handling
-data. Extended Backhaus-Naur Format (EBNF) is a well-established
-standard for describing the syntax of such structured text [@ebnf].  A
+data. Extended Backhaus-Naur Format (EBNF) [@ebnf] is a well-established
+standard for describing the syntax of such structured text.  A
 useful subset of such grammars is known as `LALR(1)`, meaning that the
 grammars describe text that can be unambiguously parsed based
 only on the tokens already seen and the next token of input [@lalr].
