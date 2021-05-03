@@ -1,5 +1,5 @@
 ---
-title: 'Lerche: Generating fast data file processors in Julia from EBNF grammars'
+title: 'Lerche: Generating data file processors in Julia from EBNF grammars'
 tags:
   - Julia
   - data processing
@@ -12,9 +12,9 @@ authors:
   - name: Erez Shinan
     affiliation: 2
 affiliations:
-  - name: Australian Nuclear Science and Technology Research Organisation, Sydney, Australia
+  - name: Australian Nuclear Science and Technology Organisation, Sydney, Australia
     index: 1
-  - name: xxx
+  - name: Independent researcher
     index: 2
 date: 23 April 2021
 bibliography: paper.bib
@@ -95,14 +95,15 @@ possible value for a plain sequence of characters in certain contexts,
 in which case a non-contextual lexer might wrongly fail to recognise
 the keyword.
 
-Lark/Lerche grammars extend the EBNF standard in several ways. To aid in
-composability, they support templating, and importing rules and terminals
-from other grammars. To aid in refactoring, they support expressing rule
-semantics, which are translatable to common tree operations. For example,
-rules starting with `_` are considered to be auxiliary, and don't produce
-their own node. Terminals starting with `_` aren't included in the tree,
-which is often desired for punctation such as commas and parentheses. 
-In order to resolve possible ambiguities or conflicts, there is support
+The Lark grammars recognised by `Lerche` extend the EBNF standard in
+several ways. To aid in composability, they support templating, and
+importing rules and terminals from other grammars. To aid in
+refactoring, they support expressing rule semantics, which are
+translatable to common tree operations. For example, rules starting
+with `_` are considered to be auxiliary, and don't produce their own
+node. Terminals starting with `_` aren't included in the tree, which
+is often desired for punctation such as commas and parentheses.  In
+order to resolve possible ambiguities or conflicts, there is support
 for specifying priority in terminals and rules.
 
 
