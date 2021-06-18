@@ -269,6 +269,7 @@ abstract type Visitor_Recursive <: VisitorBase end
 _call_userfunc(v::VisitorBase,tree) = transformer_func(v,Val{Symbol(tree.data)}(),Meta(),tree)
 
 transformer_func(v::VisitorBase,::Val,tree) = tree
+transformer_func(v::VisitorBase,::Val,::Meta,tree) = tree
 
 """
     visit(v::Visitor,tree)
