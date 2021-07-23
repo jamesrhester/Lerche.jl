@@ -93,7 +93,12 @@ match_examples(ui::UnexpectedInput,parse_call,examples,token_type_match_fallback
     return candidate[1]
 end
 
+"""
+    UnexpectedCharacters
 
+This exception is raised when the next characters in the input
+stream cannot be matched with any acceptable tokens.
+"""
 struct UnexpectedCharacters <: UnexpectedInput
     seq
     pos_in_stream
@@ -120,6 +125,12 @@ Base.showerror(io::IO,uc::UnexpectedCharacters) = begin
     println(io,message)
 end
 
+"""
+    UnexpectedToken
+
+This exception is raised when a token is encountered in the input stream
+that is not allowed by the grammar.
+"""
 struct UnexpectedToken <: UnexpectedInput
     token
     expected

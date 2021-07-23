@@ -13,6 +13,8 @@ Lark(grammar::String;options...)
 Lark(grammar::IOStream,source;options...)
 Lerche.open(grammar_filename;rel_to=nothing,options...)
 Lerche.parse(l::Lark,text;start=nothing,on_error=nothing)
+UnexpectedCharacters
+UnexpectedToken
 ```
 
 ## Working with the parse tree

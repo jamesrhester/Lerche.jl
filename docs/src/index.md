@@ -54,9 +54,16 @@ file](https://github.com/jamesrhester/DrelTools.jl/blob/master/src/jl_transforme
 
 !!! tip
 
-    Fully qualify the `parse` call (`Lerche.parse`) to avoid ambiguity with `parse` from
+    Fully qualify the `parse` call (i.e. write `Lerche.parse`) to avoid ambiguity with `parse` from
     other packages, including `Base.parse`
     
+## Error handling
+
+When the supplied text does not match the grammar, `parse` raises exceptions that
+are subtypes of `UnexpectedInput`:[`UnexpectedToken`](@ref)
+and [`UnexpectedCharacters`](@ref). `Base.show` for these types produces an informative
+message regarding the position of the error and expected tokens.
+
 # Defining a Grammar
 
 The full Lark grammar is described [here](grammar.md).

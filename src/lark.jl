@@ -284,6 +284,10 @@ get_terminal(l::Lark,name) = l._terminals_dict[name]
 Parse `text` using parser `l`, returning a parse tree. If `start` is
 not nothing, it identifies the start symbol. `on_error` is currently
 ignored.
+
+If `text` does not conform to the grammar, either 
+[`UnexpectedToken`](@ref) or [`UnexpectedCharacters`](@ref) 
+is raised.
 """
 parse(l::Lark,text;start=nothing,on_error=nothing) = begin
     try

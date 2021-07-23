@@ -7,7 +7,7 @@ Python to Julia.  Lark grammars should work unchanged in Lerche.
 
 **Installation**: at the Julia REPL, `using Pkg; Pkg.add("Lerche")`
 
-**Documentation**: [![][docs-stable-img]][docs-stable-url] [![][docs-latest-img]][docs-latest-url]
+**Documentation**: [![][docs-latest-img]][docs-latest-url]
 
 # Quick start
 
@@ -46,6 +46,22 @@ x = Lerche.transform(MyTransformer(),t)  #transform parse tree
 ```
 
 For a real-world example of usage, see [this file](https://github.com/jamesrhester/DrelTools.jl/blob/master/src/jl_transformer.jl).
+
+# Issues
+
+Please raise any issues or problems with using Lerche in the [Github
+issue tracker](https://github.com/jamesrhester/Lerche.jl/issues).
+
+# Contributions
+
+Contributions of all types are welcome. Examples include:
+* Improvements to processing speed
+* Improved documentation
+* Links to projects using Lerche
+* Commenting and triaging issues
+
+The most straightforward way to make a contribution is to fork the
+repository, make your changes, and create a pull request.
 
 # Notes for Lark users
 
