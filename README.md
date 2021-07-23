@@ -69,13 +69,13 @@ Please read the Lark documentation.  When converting from Lark
 programs written in Python to Lerche programs written in Julia, the
 changes outlined below are necessary.
 
-1. All Transformer and Visitor classes become types
+1. All Transformer and Visitor classes become subtypes of Transformer/Visitor
 1. All class method calls become Julia method calls with an instance of the type as the first argument
 (i.e. replacing ``self``)
 1. Transformation or visitor rules should be preceded by the ``@rule`` macro. Inline
 rules use the ``@inline_rule`` macro. 
-1. The first argument of transformation and visitor rules is a variable of the
-desired transformation/visitor type.
+1. The first argument of transformer and visitor rules is a variable of the
+desired transformer/visitor type.
 1. Any grammars containing backslash-double quote sequences need to be fixed (see below).
 1. Any grammars containing backslash-x to denote a byte value need to be fixed (see below).
 
@@ -107,7 +107,7 @@ The ``@rule`` and ``@inline_rule`` macros define methods of Lerche function
 appropriate method at runtime.
 
 Parsing a large (500K) file suggest Lerche is about 3 times faster
-than Lark for parsing. Parser generation is much slower as no
+than Lark with CPython for parsing. Parser generation is much slower as no
 optimisation techniques have been applied (yet). Calculating and
 storing your grammar in a Julia `const` variable at the top level 
 of your package will allow it to be precompiled and thus avoid
