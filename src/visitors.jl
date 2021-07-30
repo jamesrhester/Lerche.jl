@@ -125,7 +125,7 @@ _call_userfunc(t::Transformer,tr::Tree; new_children = nothing) = begin
 end
 
 _call_userfunc_token(t::Transformer,token) = begin
-    return token_func(t,Val{Symbol(token)}(),token)
+    return token_func(t,Val{Symbol(token.type_)}(),token)
 end
 
 # No need for a channel here as we just collect the results anyway.
