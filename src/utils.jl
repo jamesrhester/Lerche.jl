@@ -1,4 +1,4 @@
-export have_method,invoke_callback, @rule, @inline_rule
+export have_method,invoke_callback, @rule, @inline_rule, @terminal
 
 classify_bool(seq, pred) = begin
     true_elems = eltype(seq)[]
@@ -234,6 +234,29 @@ macro inline_rule(s)
         Lerche.transformer_func(x::$rule_type,y::Val{$rule_name},meta::Lerche.Meta,z::Array) = Lerche.transformer_func(x,y,z...);
         $s
         end)
+end
+
+"""
+    @terminal s
+
+`s` is a function definition of form `terminal_name(t,tok) = ...`
+where `t` is an instance of a subtype of `Transformer` or
+`Visitor`. `tok` is a token of type
+`terminal_name`. If `visit_tokens(::t)` is `true`, this function will be
+called whenever tokens of type `terminal_name` are processed.
+"""
+macro terminal(s)
+    if s.head != :(=) || s.args[1].head != :call
+        error("A terminal rule must be a function definition")
+    end    
+    rule_name = QuoteNode(s.args[1].args[1])
+    if s.args[1].args[2].head != :(::)
+        error("Type must be included in the first argument to define a terminal rule: $s")
+    end
+    rule_type = s.args[1].args[2].args[2] # the type name
+    esc(quote
+        Lerche.token_func($(s.args[1].args[2]),::Val{Symbol($rule_name)},$(s.args[1].args[3])) = $(s.args[2])
+    end )
 end
 
 """

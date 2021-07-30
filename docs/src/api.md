@@ -21,12 +21,14 @@ UnexpectedToken
 
 `transform` transforms the parse tree according to rules defined by
 the user using `@rule` and `@inline_rule` macros. Tokens will also be
-processed if `visit_tokens` returns `true` for that transformer type. 
-This will significantly slow down parse tree processing.
+processed using methods defined using `@terminal` if `visit_tokens` 
+returns `true` for that transformer type.
+Token processing will slow down parse tree processing by around 20%.
 
 ```@docs
 @rule s
 @inline_rule s
+@terminal s
 Transformer
 Transformer_InPlace
 Transformer_InPlaceRecursive

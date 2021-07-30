@@ -25,14 +25,16 @@ structure as follows:
 1. Define one or more subtypes of ``Transformer`` or ``Visitor`` instances of which will be
 passed as the first argument to the appropriate rule. The instance can also be used to
 hold information during transformation if you wish, in which case it must have a concrete type.
-1. Define `visit_tokens(t::MyNewType) = false`. This is currently an order of magnitude faster
-than leaving the default `true`.
+1. Define `visit_tokens(t::MyNewType) = false` if you will not be processing token values. This
+is about 25% faster than leaving the default `true`.
 1. For every production in your grammar that you wish to process,
 write a rule with identical name to the production
 1. The rule should be prefixed with macro ``@rule`` if the second argument
 is an array containing all of the arguments to the grammar production
 1. The rule should be prefixed with macro ``@inline_rule`` if the second
 and following arguments refer to each argument in the grammar production
+1. For every token which you wish to process, define an identically-named method
+as for rules, but precede it with a ``@terminal`` macro instead of ``@rule``.
 
 If your grammar is in ``String`` variable ``mygrammar``, your text to be parsed and transformed
 is in ``String`` variable ``mytext``, and your ``Transformer`` subtype is ``MyTransformer``, the
@@ -73,7 +75,7 @@ changes outlined below are necessary.
 1. All class method calls become Julia method calls with an instance of the type as the first argument
 (i.e. replacing ``self``)
 1. Transformation or visitor rules should be preceded by the ``@rule`` macro. Inline
-rules use the ``@inline_rule`` macro. 
+rules use the ``@inline_rule`` macro and token processing methods use ``@terminal``. 
 1. The first argument of transformer and visitor rules is a variable of the
 desired transformer/visitor type.
 1. Any grammars containing backslash-double quote sequences need to be fixed (see below).
@@ -104,7 +106,8 @@ Julian approach in future.
 
 The ``@rule`` and ``@inline_rule`` macros define methods of Lerche function
 `transformer_func`. Julia multiple dispatch is used to select the
-appropriate method at runtime.
+appropriate method at runtime. ``@terminal`` similarly defines methods
+of ``token_func``.
 
 Parsing a large (500K) file suggest Lerche is about 3 times faster
 than Lark with CPython for parsing. Parser generation is much slower as no

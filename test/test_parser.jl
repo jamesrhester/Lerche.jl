@@ -44,6 +44,17 @@ end
     @test_throws Exception Lark(g,parser="lalr")
 end
 
+# For use in token transform test
+# Two concrete types distinguished by whether or not
+# to handle tokens
+abstract type TVT <: Transformer end
+struct TVTT <: TVT end
+struct TVTF <: TVT end
+@rule a(t::TVT,children) = children[1]*"!"
+@terminal A(t::TVT,tok) = Lerche.update(tok,value=uppercase(tok.value))
+Lerche.visit_tokens(t::TVTF) = false
+Lerche.visit_tokens(t::TVTT) = true #default anyway
+
 make_parser_test(lexer,parser) = begin
     make_lark(grammar;kwargs...) = begin
         Lark(grammar,lexer=lexer,parser=parser,propagate_positions=true;kwargs...)
@@ -82,6 +93,39 @@ make_parser_test(lexer,parser) = begin
     r = Lerche.parse(g,"xx")
     @test r.children[1].data == "c" 
 
+    end
+
+    @testset "test comment in rule definition" begin
+        g = Lark("""start: a
+                a: "a"
+                // A comment
+                // Another comment
+                | "b"
+                // Still more
+                c: "unrelated"
+            """)
+        r = Lerche.parse(g,"b")
+        @test r.children[1].data == "a"
+    end
+
+    @testset "test visit tokens" begin
+        
+        g = """start: a
+            a : A
+            A: "x"
+            """
+        p = Lark(g, parser="lalr")
+        tf = TVTF()
+        r = transform(tf, Lerche.parse(p,"x"))
+        @test r.children == ["x!"]
+        tt = TVTT()
+        r = transform(tt,Lerche.parse(p,"x"))
+        @test r.children == ["X!"]
+
+        # Test internal transformer
+        p = Lark(g, parser="lalr", transformer=TVTT())
+        r = Lerche.parse(p,"x")
+        @test r.children == ["X!"]
     end
     
     @testset "Test basic 1 ($lexer, $parser)" begin

@@ -30,14 +30,18 @@ structure as follows:
      argument to the appropriate rule.  The instance can also be used
      to hold information during transformation if you wish, in which
      case it must have a concrete type.
-  1. Define `visit_tokens(t::MyNewType) = false`. This is currently an
-     order of magnitude faster than leaving the default `true`.
+  1. Define `visit_tokens(t::MyNewType) = false` if you will not be
+     processing token values. This is about 25% faster than leaving the
+     default `true`.
   1. For every production in your grammar that you wish to process,
      write a rule with identical name to the production
   1. The rule should be prefixed with macro [`@rule`](@ref) if the second argument
      is an array containing all of the arguments to the grammar production
   1. The rule should be prefixed with macro [`@inline_rule`](@ref) if the second
      and following arguments refer to each argument in the grammar production
+  1. For every token which you wish to process, define an identically-named method
+     as for rules, but precede it with a [`@terminal`](@ref) macro instead of `@rule`.
+
 
 If your grammar is in `String` variable `mygrammar`, your text to be parsed and transformed
 is in `String` variable `mytext`, and your `Transformer` subtype is `MyTransformer`, the
@@ -175,7 +179,7 @@ programs written in Julia, make the following changes:
      of the type as the first argument (i.e. replacing `self`)
   3. Transformation or visitor rules should be preceded by the
      [`@rule`](@ref) macro. Inline rules use the [`@inline_rule`](@ref)
-     macro.
+     macro and token processing methods use [`@terminal`](@ref). 
   4. Any grammars containing backslash-double quote sequences need to be edited (see below).
   5. Any grammars containing backslash-x to denote a byte value need to be edited (see below).
 
