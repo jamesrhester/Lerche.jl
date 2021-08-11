@@ -1,3 +1,4 @@
+[![DOI](https://zenodo.org/badge/226250636.svg)](https://zenodo.org/badge/latestdoi/226250636)
 ![Testing](https://github.com/jamesrhester/Lerche.jl/workflows/CI/badge.svg)
 [![Coverage Status](https://coveralls.io/repos/github/jamesrhester/Lerche.jl/badge.svg?branch=master)](https://coveralls.io/github/jamesrhester/Lerche.jl?branch=master)
 # Introduction
