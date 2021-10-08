@@ -1,7 +1,7 @@
 name = "Lerche"
 uuid = "d42ef402-04e6-4356-9f73-091573ea58dc"
 authors = ["James.Hester <jxh@ansto.gov.au>"]
-version = "0.5.1"
+version = "0.5.2"
 
 [deps]
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
