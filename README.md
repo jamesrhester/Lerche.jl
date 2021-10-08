@@ -1,9 +1,10 @@
 [![DOI](https://zenodo.org/badge/226250636.svg)](https://zenodo.org/badge/latestdoi/226250636)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.03497/status.svg)](https://doi.org/10.21105/joss.03497)
 ![Testing](https://github.com/jamesrhester/Lerche.jl/workflows/CI/badge.svg)
 [![Coverage Status](https://coveralls.io/repos/github/jamesrhester/Lerche.jl/badge.svg?branch=master)](https://coveralls.io/github/jamesrhester/Lerche.jl?branch=master)
 # Introduction
 
-Lerche (German for Lark) is a partial port of the Lark grammar processor from
+Lerche (German for Lark) is a partial port of the [Lark grammar processor](https://github.com/erezsh/lark-parser/lark) from
 Python to Julia.  Lark grammars should work unchanged in Lerche.
 
 **Installation**: at the Julia REPL, `using Pkg; Pkg.add("Lerche")`
@@ -49,6 +50,10 @@ x = Lerche.transform(MyTransformer(),t)  #transform parse tree
 ```
 
 For a real-world example of usage, see [this file](https://github.com/jamesrhester/DrelTools.jl/blob/master/src/jl_transformer.jl).
+
+## Citation
+
+If you are publishing work where Lerche has been useful, please consider citing [the Lerche paper](https://doi.org/10.21105/joss.03497).
 
 # Issues
 
