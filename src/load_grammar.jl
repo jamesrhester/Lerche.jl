@@ -156,7 +156,7 @@ end
 EBNF_to_BNF() = EBNF_to_BNF([],Dict(),"anon",0,nothing)
 
 _add_recurse_rule(etb::EBNF_to_BNF,type_,expr) = begin
-    if expr in collect(keys(etb.rules_by_expr))
+    if expr in keys(etb.rules_by_expr)
         return etb.rules_by_expr[expr]
     end
     new_name = "__$(etb.prefix)_$(type_)_$(etb.i)"
