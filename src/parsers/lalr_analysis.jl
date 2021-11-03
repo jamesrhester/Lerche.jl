@@ -57,13 +57,13 @@ end
 # digraph and traverse, see The Theory and Practice of Compiler Writing
 
 # computes F(x) = G(x) union (union { G(y) | x R y })
-# X: nodes
+# X: nodes of type V
 # R: relation (function mapping node -> list of nodes that satisfy the relation)
 # G: set valued function
-digraph(X, R, G) = begin
-    F = Dict()
-    S = []
-    N = Dict{Any,Int64}()
+digraph(X::Vector{V}, R, G) where V = begin
+    F = Dict{V,Set{Terminal}}()
+    S = V[]
+    N = Dict{V,Int64}()
     for x in X
         N[x] = 0
     end
@@ -83,7 +83,7 @@ end
 # R: relation (see above)
 # G: set valued function
 # F: set valued function we are computing (map of input -> output)
-traverse(x, S, N, X, R, G, F) = begin
+traverse(x::V, S::Vector{V}, N, X, R, G, F) where V = begin
     push!(S,x)
     d = length(S)
     N[x] = d
@@ -117,29 +117,41 @@ end
 # Grammar analysis
 
 mutable struct LALR_Analyzer <: GrammarAnalyzer
-    debug
-    rules_by_origin
-    start_states
-    end_states
-    parse_table
-    FIRST
-    FOLLOW
-    NULLABLE
-    nonterminal_transitions
-    directly_reads::DefaultDict
-    reads::DefaultDict
-    includes::DefaultDict
-    lookback::DefaultDict
-    lr0_states::Set
-    lr0_start_states::Dict
-    lr0_rules_by_origin
+    debug::Bool
+    rules_by_origin::Dict{Any,Any}
+    start_states::Dict{String,Set{RulePtr}}
+    end_states::Dict{String,Set{RulePtr}}
+    parse_table::ParseTable
+    FIRST::Dict{LarkSymbol,Set{LarkSymbol}}
+    FOLLOW::Dict{LarkSymbol,Set{LarkSymbol}}
+    NULLABLE::Set{LarkSymbol}
+    nonterminal_transitions::Vector{Tuple{LR0ItemSet,NonTerminal}}
+    directly_reads::DefaultDict{Tuple{LR0ItemSet,NonTerminal},Set{Terminal}}
+    reads::DefaultDict{Tuple{LR0ItemSet,NonTerminal},Set{Tuple{LR0ItemSet,LarkSymbol}}}
+    includes::DefaultDict{Tuple{LR0ItemSet,NonTerminal},Set{Tuple{LR0ItemSet,NonTerminal}}}
+    lookback::DefaultDict{Tuple{LR0ItemSet,NonTerminal},Set{Tuple{LR0ItemSet,Rule}}}
+    lr0_states::Set{LR0ItemSet}
+    lr0_start_states::Dict{String,LR0ItemSet}
+    lr0_rules_by_origin::Dict{NonTerminal,Vector{Rule}}
+    LALR_Analyzer(parser_conf;debug=true) = begin
+        x =  new()
+        x.lr0_states = Set()
+        x.nonterminal_transitions = []
+        x.reads = DefaultDict(Dict())
+        x.directly_reads = DefaultDict(Dict())
+        x.includes = DefaultDict(Dict())
+        x.lookback = DefaultDict(Dict())
+        x.lr0_states = Set()
+        init_analyser!(x,parser_conf,debug=debug)
+        return x
+    end
 end
 
-LALR_Analyzer(parser_conf;debug=true) = begin
-    l = LALR_Analyzer(debug,nothing,nothing,nothing,nothing,nothing,nothing,nothing,[],DefaultDict{Any,Set}(),DefaultDict{Any,Set}(),DefaultDict{Any,Set}(),DefaultDict{Any,Set}(),Set(),Dict(),[])
-    init_analyser!(l,parser_conf,debug=debug)
-    return l
-end
+#LALR_Analyzer(parser_conf;debug=true) = begin
+#    l = LALR_Analyzer(debug,nothing,nothing,nothing,nothing,nothing,nothing,nothing,[],DefaultDict{Any,Set}(),DefaultDict{Any,Set}(),DefaultDict{Any,Set}(),DefaultDict{Any,Set}(),Set(),Dict(),[])
+#    init_analyser!(l,parser_conf,debug=debug)
+#    return l
+#end
 
 compute_lr0_states(l::LALR_Analyzer) = begin
     l.lr0_states = Set()
@@ -280,10 +292,10 @@ compute_lookaheads(l::LALR_Analyzer) = begin
 end
 
 compute_lalr1_states(l::LALR_Analyzer) = begin
-    m = IdDict()
+    m = IdDict{LR0ItemSet,IdDict{String,Tuple{Symbol,Union{Set{RulePtr},Rule}}}}()
     reduce_reduce = []
     for state in l.lr0_states
-        actions = IdDict()
+        actions = IdDict{LarkSymbol,Tuple{Symbol,Union{Set{RulePtr},Rule}}}()
         for (la, next_state) in state.transitions
             actions[la] = (:shift, next_state.closure)
         end
@@ -291,7 +303,7 @@ compute_lalr1_states(l::LALR_Analyzer) = begin
         for (la, rules) in state.lookaheads
             if length(rules) > 1
                 # Try to resolve conflict based on priority
-                p = [(r.options.priority || 0, r) for r in rules]
+                p = Tuple{Int,Rule}[(r.options.priority || 0, r) for r in rules]
                 sort!(p,by=r -> r[1], rev=true)
                 best, second_best = p[1:2]
                 if best[1] > second_best[1]
@@ -310,7 +322,7 @@ compute_lalr1_states(l::LALR_Analyzer) = begin
             end
         end
         
-        m[state] = IdDict([k.name => v for (k, v) in actions])
+        m[state] = IdDict(Pair{String,Tuple{Symbol,Union{Set{RulePtr},Rule}}}[k.name => v for (k, v) in actions])
     end
     
     if !isempty(reduce_reduce)
