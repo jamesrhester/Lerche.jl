@@ -65,7 +65,7 @@ function __lookup_kwbody__(mnokw::Method)
 end
 
 function _precompile_()
-    ccall(:jl_generating_output, Cint, ()) == 1 || return nothing
+    ccall(:jl_generating_output, Cint, ()) == 1 || return false
     Base.precompile(Tuple{Core.kwftype(typeof(Type)),NamedTuple{(:order, :alias, :options),Tuple{Int64,String,RuleOptions}},Type{Rule},NonTerminal,Array{Any,1}})
     Base.precompile(Tuple{Type{PrepareAnonTerminals},Array{TerminalDef,1},Set{String},Dict{Any,Any},Int64,Nothing})
     Base.precompile(Tuple{Type{TraditionalLexer},LexerConf})
