@@ -8,7 +8,7 @@ macro warnpcfail(ex::Expr)
     quote
         pcresult = $(esc(ex))
         if !isnothing(pcresult)
-            $(esc(ex)) || @warn """precompile directive
+             pcresult || @warn """precompile directive
              $($(Expr(:quote, ex)))
              failed. Please report an issue in $($modl) (after checking for duplicates) or remove this directive.""" _file=$file _line=$line
         end
