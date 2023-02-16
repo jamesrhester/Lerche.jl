@@ -6,9 +6,12 @@ macro warnpcfail(ex::Expr)
     file = __source__.file === nothing ? "?" : String(__source__.file)
     line = __source__.line
     quote
-        $(esc(ex)) || @warn """precompile directive
-     $($(Expr(:quote, ex)))
- failed. Please report an issue in $($modl) (after checking for duplicates) or remove this directive.""" _file=$file _line=$line
+        pcresult = $(esc(ex))
+        if !isnothing(pcresult)
+             pcresult || @warn """precompile directive
+             $($(Expr(:quote, ex)))
+             failed. Please report an issue in $($modl) (after checking for duplicates) or remove this directive.""" _file=$file _line=$line
+        end
     end
 end
 
