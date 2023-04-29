@@ -59,7 +59,34 @@ make_parser_test(lexer,parser) = begin
     make_lark(grammar;kwargs...) = begin
         Lark(grammar,lexer=lexer,parser=parser,propagate_positions=true;kwargs...)
     end
-    
+    @testset "test_priority" begin
+        g = Lark("""
+object: genericobj
+        | list
+        | ESCAPED_STRING
+        | SIGNED_FLOAT
+        | INT
+        | true
+        | false
+        | null
+
+genericobj : "{" ["\\"type\\"" ":" object "," ]"\\"fields\\"" ":" list "}"
+
+list : "[" [object ("," object)*] "]"
+true : "true"
+false : "false"
+null : "null"
+
+%import common.ESCAPED_STRING
+%import common.INT
+%import common.SIGNED_FLOAT
+%import common.WS
+%ignore WS
+""", start="object", parser="lalr")
+        r = Lerche.parse(g,"2.0")
+        @test r.children[1].data === 2.0
+    end
+
     @testset "Test expansions" begin
     #Test expand1
     g = Lark("""start: a
