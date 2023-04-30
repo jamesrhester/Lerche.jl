@@ -85,6 +85,7 @@ null : "null"
 """, start="object", parser="lalr")
         r = Lerche.parse(g,"2.0")
         @test r.children[1].data === 2.0
+        print_tree(r)
     end
 
     @testset "Test expansions" begin
@@ -95,6 +96,7 @@ null : "null"
                  """,parser="lalr",lexer="standard",debug=true)
 
     r = Lerche.parse(g,"x")
+    print_tree(r)
     @test r.children[1].data == "b"
     
     g = Lark("""start: a

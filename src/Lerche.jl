@@ -2,6 +2,8 @@ module Lerche
 
 using DataStructures  #For Stack when parsing
 using Logging         #Because Lark does
+using AbstractTrees
+using AbstractTrees: print_tree
 
 export Tree, Token, Interpreter,Visitor,Transformer, visit_children, visit,transform
 export Transformer_InPlace, Transformer_InPlaceRecursive,Visitor_Recursive
@@ -10,6 +12,7 @@ export UnexpectedInput
 export Lark
 export visit_tokens   #So users can override default trait for Transformers
 export @inline_rule, @rule
+export print_tree
 #==
 
 Lerche ("Lark" in German) is a port of the Python Lark package to
@@ -37,6 +40,7 @@ include("parsers/lalr_parser.jl")
 include("parser_frontends.jl")
 include("load_grammar.jl")
 include("lark.jl")
+include("print_tree.jl")
 
 # Compatibility for Julia < 1.4
 
