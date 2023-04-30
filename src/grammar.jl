@@ -44,7 +44,7 @@ is_terminal(::IsNotTerminal,l) = false
 
 # == Rule options == #
 
-struct RuleOptions
+mutable struct RuleOptions
     keep_all_tokens::Bool
     expand1::Bool
     priority::Union{Int,Nothing}
