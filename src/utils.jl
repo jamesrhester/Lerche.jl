@@ -110,8 +110,8 @@ get_regexp_width(regexp) = begin
         throw(error("Cannot parse $regexp as regexp"))
     end
     # A naive guess. Character ranges are not caught, neither are repeats
-    if (occursin("+",regexp) && !occursin("\\+",regexp))|| (
-        occursin("*",regexp) && !occursin("\\*",regexp))
+    if  occursin(Regex(raw"(?<!\\)\+"), regexp) || 
+        occursin(Regex(raw"(?<!\\)\*"), regexp)
         maxlength = 1000
         #println("$regexp has a big maxlength")
     else

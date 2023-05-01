@@ -256,7 +256,7 @@ build_mres(terminals,g_regex_flags;match_whole=false) = begin
     #println("String for regex: $prep_string")
     mres = Regex(prep_string,g_regex_flags)
     names_by_idx = Base.PCRE.capture_names(mres.regex)
-    #println("All regexes now $mres")
+    @debug "All regexes now $mres"
     return mres,names_by_idx
 end
 
@@ -293,6 +293,7 @@ TraditionalLexer(conf) = begin
     newline_types = [t.name for t in terminals if _regexp_has_newline(to_regexp(t.pattern))]
     ignore_types = Set(conf.ignore)
     sort!(terminals, by= x -> (-x.priority, -max_width(x.pattern),-length(x.pattern.value),x.name))
+    @debug "Terminals: " terminals
     # _build called instead in Lark 0.11.1
     temp_terminals, callback = _create_unless(terminals,conf.g_regex_flags)
     for (type_,f) in conf.callbacks
