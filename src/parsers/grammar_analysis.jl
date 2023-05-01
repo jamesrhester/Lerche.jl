@@ -218,9 +218,11 @@ expand_rule(g::GrammarAnalyzer,source_rule, rules_by_origin=nothing) = begin
     _expand_rule(_rule) = begin
         Channel() do rule_chan
             #@assert !_rule.is_term _rule
+            @debug "Expanding" _rule
             for r in rules_by_origin[_rule]
                 init_ptr = RulePtr(r,0)
                 push!(init_ptrs,init_ptr)
+                @debug "Added rule" init_ptr
 
                 if !isempty(r.expansion)
                     # Next symbol from this
@@ -236,5 +238,6 @@ expand_rule(g::GrammarAnalyzer,source_rule, rules_by_origin=nothing) = begin
 
     _ = collect(bfs([source_rule], _expand_rule))
 
+    @debug "Final rules after expansion" init_ptrs
     return init_ptrs
 end

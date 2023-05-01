@@ -177,8 +177,11 @@ compute_lr0_states(l::LALR_Analyzer) = begin
         end
         push!(l.lr0_states,state)
     end
+    @debug "Number of lr0 start states" length(l.lr0_start_states)
+    @debug "Start states: $(l.lr0_start_states)"
     collect(bfs(values(l.lr0_start_states),step))
-    #println("lr0_states after: $(l.lr0_states)")
+    @debug "Number of lr0 states" length(l.lr0_states)
+    @debug "lr0_states after:" l.lr0_states
 end
 
 compute_reads_relations(l::LALR_Analyzer) = begin
@@ -294,6 +297,7 @@ end
 compute_lalr1_states(l::LALR_Analyzer) = begin
     m = IdDict{LR0ItemSet,IdDict{String,Tuple{Symbol,Union{Set{RulePtr},Rule}}}}()
     reduce_reduce = []
+    @debug "Have $(length(l.lr0_states)) states"
     for state in l.lr0_states
         actions = IdDict{LarkSymbol,Tuple{Symbol,Union{Set{RulePtr},Rule}}}()
         for (la, next_state) in state.transitions
@@ -301,15 +305,18 @@ compute_lalr1_states(l::LALR_Analyzer) = begin
         end
         
         for (la, rules) in state.lookaheads
+            @debug "State" state
             if length(rules) > 1
                 # Try to resolve conflict based on priority
                 p = [(r.options.priority !== nothing ? r.options.priority : 0, r) for r in rules]
                 sort!(p,by=r -> r[1], rev=true)
                 best, second_best = p[1:2]
+                @debug "Conflict:" state la p
                 if best[1] > second_best[1]
                     rules = [best[2]]
                 else
                     push!(reduce_reduce,(state, la, rules))
+                    @debug "Reduce/reduce conflict" reduce_reduce[end]
                 end
             end
             if la in keys(actions)

@@ -147,7 +147,7 @@ const RULES = Dict(
 
 mutable struct EBNF_to_BNF <: Transformer_InPlace
     new_rules::Array{Tuple{String,Tree,Any}}
-    rules_by_expr::Dict{Union{String,LarkSymbol,Tree},NonTerminal}
+    rules_by_expr::Dict{Union{String,LarkSymbol,Tree}, NonTerminal}
     prefix::String
     i::Int
     rule_options::Union{Nothing,RuleOptions}
@@ -640,7 +640,10 @@ compile(g::Grammar, start, terminals_to_keep) = begin
         ebnf_to_bnf.prefix = name
         anon_tokens_transf.rule_options = rule_options
         tree = transform(transformer,rule_tree)
-        push!(rules,(name, transform(ebnf_to_bnf,tree), options))
+        @debug "After anon transf" name tree
+        res = transform(ebnf_to_bnf,tree)
+        @debug "After bnf transf" res
+        push!(rules,(name, res, options))
     end
    
     append!(rules, ebnf_to_bnf.new_rules)

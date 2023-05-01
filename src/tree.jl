@@ -106,8 +106,12 @@ end
 end
 ==#
 
-Base.hash(t1::Tree) = begin
-    return hash(t1.data,hash(t1.children))
+Base.hash(t1::Tree,h::UInt) = begin
+    h = hash(t1.data,h)
+    for t in t1.children
+        h = hash(t, h)
+    end
+    return h
 end
 
 find_pred(t::Tree,pred) = begin
