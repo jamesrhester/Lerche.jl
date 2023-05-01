@@ -303,7 +303,7 @@ compute_lalr1_states(l::LALR_Analyzer) = begin
         for (la, rules) in state.lookaheads
             if length(rules) > 1
                 # Try to resolve conflict based on priority
-                p = Tuple{Int,Rule}[(r.options.priority || 0, r) for r in rules]
+                p = Tuple{Int,Rule}[(r.options.priority !== nothing ? r.options.priority : 0, r) for r in rules]
                 sort!(p,by=r -> r[1], rev=true)
                 best, second_best = p[1:2]
                 if best[1] > second_best[1]
