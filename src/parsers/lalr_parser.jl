@@ -84,9 +84,9 @@ feed_token!(ps::ParserState,token;is_end=false) = begin
         arg = nothing  #create outside scope of try
         action = nothing # ditto
         state = first(state_stack)
-        #println("State $state, current token $(token.type_) ($token)")
+        @debug "State $state, current token $(token.type_) ($token)"
         try
-            #println("Possibles: $(keys(states[state]))\n")
+            @debug "Possibles: $(keys(states[state]))\n"
             action,arg = states[state][token.type_]
         catch e
             if e isa KeyError
@@ -99,13 +99,13 @@ feed_token!(ps::ParserState,token;is_end=false) = begin
         @assert arg != end_state
         if action == :shift
             @assert !is_end
-            #println("Shift!")
+            @debug "Shift!"
             push!(state_stack,arg)
             push!(value_stack,token)
             return
         end
         size = length(arg.expansion)::Int
-        #println("Preparing to pop $size values")
+        @debug "Preparing to pop $size values"
         if size > 0
             s = grab!(value_stack,size)
             for i = 1:size
@@ -116,7 +116,7 @@ feed_token!(ps::ParserState,token;is_end=false) = begin
         end
         value = callbacks[arg](s)
 
-        #println("Reduced, value now $value")
+        @debug "Reduced, value now $value"
         _action, new_state = states[first(state_stack)][arg.origin.name]::Tuple{Symbol,Int64}
         @assert _action == :shift
         push!(state_stack,new_state)
@@ -139,7 +139,7 @@ parse_from_state(p::_Parser,lexer,state::ParserState) = begin
     try
         token = nothing
         for token in lp
-            #println("Seen $(token.type_): $token")
+            @debug println("Seen $(token.type_): $token")
             feed_token!(state,token)
         end
         token = !(token===nothing) ? new_borrow_pos("\$END","",token) : Token("\$END","",
@@ -149,7 +149,7 @@ parse_from_state(p::_Parser,lexer,state::ParserState) = begin
         return feed_token!(state,token,is_end=true)
     catch e
         if e isa UnexpectedInput
-            println("Unexpected input: $e")
+            @debug "Unexpected input: $e"
             try
                 e.puppet = ParserPuppet(p,state,lexer)
             catch f
@@ -159,7 +159,7 @@ parse_from_state(p::_Parser,lexer,state::ParserState) = begin
             end
             rethrow(e)
         else
-            if p.debug
+            @debug begin
                 println("")
                 println("STATE STACK DUMP")
                 println("----------------")

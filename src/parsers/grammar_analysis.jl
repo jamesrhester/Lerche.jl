@@ -59,11 +59,11 @@ Base.hash(r1::RulePtr,h::UInt64) = hash(r1.rule,hash(r1.index,h))
 struct LR0ItemSet
     kernel::Set{RulePtr}
     closure::Set{RulePtr}
-    transitions::Dict
-    lookaheads::DefaultDict
+    transitions::Dict{LarkSymbol,LR0ItemSet}
+    lookaheads::DefaultDict{Terminal,Set{Rule}}
 end
 
-LR0ItemSet(kernel,closure) = LR0ItemSet(Set(kernel),Set(closure),Dict(),DefaultDict{Any,Set}())
+LR0ItemSet(kernel,closure) = LR0ItemSet(Set(kernel),Set(closure),Dict(),DefaultDict{Terminal,Set{Rule}}())
 
 Base.show(io::IO,l::LR0ItemSet) = begin
     joinstr = ", "
@@ -170,6 +170,10 @@ end
 
 abstract type GrammarAnalyzer end
 
+#==
+This sets debug,rules_by_origin,start_states,end_states,lr0_rules_by_origin
+lr0_start_states,first,follow,nullable
+==#
 init_analyser!(g::GrammarAnalyzer,parser_conf;debug=false) = begin
     g.debug = debug
     root_rules = Dict([start => Rule(NonTerminal("\$root_" * start), [NonTerminal(start), Terminal("\$END")]) for start in parser_conf.start])

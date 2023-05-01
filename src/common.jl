@@ -33,8 +33,8 @@ reconfigure(l::LexerConf,tokens) = begin
 end
 
 struct ParserConf
-    rules::Array{Rule}
+    rules::Vector{Rule}
     callbacks::Dict{Rule,Function}
-    start::Array{String} #The names of the starting rule
+    start::Vector{String} #The names of the starting rule
 end
 

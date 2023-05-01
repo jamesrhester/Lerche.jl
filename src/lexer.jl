@@ -314,7 +314,7 @@ end
 
 next_token(tl::TraditionalLexer,lex_state) = begin
     line_ctr = lex_state.line_ctr
-    #println("Pos: $(line_ctr.char_pos) out of $(lex_state.text_length), remaining text\n"*lex_state.text[line_ctr.char_pos:end]*"EOF")
+    @debug "Pos: $(line_ctr.char_pos) out of $(lex_state.text_length), remaining text\n"*lex_state.text[line_ctr.char_pos:end]*"EOF"
     while line_ctr.char_pos <= lex_state.text_length
         res = match(tl,lex_state.text,line_ctr.char_pos)
         if res === nothing
@@ -381,7 +381,7 @@ ContextualLexer(conf::LexerConf,states;always_accept=()) = begin
     lexers = Dict()
     lexer = missing  #define in outer scope
     for (state,accepts) in states
-        #println("State $state accepts $accepts")
+        @debug "State $state accepts $accepts"
         key = Set(accepts)
         try
             lexer = lexer_by_tokens[key]
@@ -391,7 +391,7 @@ ContextualLexer(conf::LexerConf,states;always_accept=()) = begin
             lexer_conf = reconfigure(trad_conf,state_tokens)
             lexer = TraditionalLexer(lexer_conf)
             lexer_by_tokens[key] = lexer
-            #println("Added lexer that accepts $key")
+            @debug "Added lexer that accepts $key"
         end
         lexers[state] = lexer
     end
