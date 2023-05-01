@@ -840,7 +840,7 @@ end
 options_from_rule(name, params, x...) = begin
     if length(x) > 1
         priority, expansions = x
-        priority = parse(Int,priority)
+        priority = Base.parse(Int,priority)
     else
         expansions = x[1]
         priority = nothing
