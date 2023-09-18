@@ -2,6 +2,7 @@ module Lerche
 
 using DataStructures  #For Stack when parsing
 using Logging         #Because Lark does
+using PrecompileTools #For fast startup
 
 export Tree, Token, Interpreter,Visitor,Transformer, visit_children, visit,transform
 export Transformer_InPlace, Transformer_InPlaceRecursive,Visitor_Recursive
@@ -47,9 +48,10 @@ catch ex
     end
 end     
 
-include("precompile.jl")
-
-@warnpcfail _precompile_()
+@compile_workload begin
+    b = GrammarLoader(false)
+    b = GrammarLoader(true)
+end
 
 const _lark_grammar_f = GrammarLoader(false)
 const _lark_grammar_t = GrammarLoader(true)
