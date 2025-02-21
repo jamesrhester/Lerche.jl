@@ -168,12 +168,18 @@ feed!(lc::LineCounter,token;test_newline=true) = begin
         newlines = count(x -> x == lc.newline_char, token)
         if newlines > 0
             lc.line = lc.line + newlines
-            lc.line_start_pos = lc.char_pos + first(findlast("$(lc.newline_char)",token))
+            newline_pos = first(findlast("$(lc.newline_char)",token))
+            lc.line_start_pos = lc.char_pos + newline_pos
+            lc.column = textwidth(token[newline_pos:end]) + 1
             #println("Line $(lc.line) starts at $(lc.line_start_pos)")
+        else
+            lc.column += textwidth(token)
         end
+    else
+        lc.column += textwidth(token)
     end
     lc.char_pos += ncodeunits(token)  #Unicode
-    lc.column = lc.char_pos - lc.line_start_pos + 1
+    #lc.column = lc.char_pos - lc.line_start_pos + 1
     #println("At end column is $(lc.column) for char pos $(lc.char_pos) token length $(length(token))")
 end
 

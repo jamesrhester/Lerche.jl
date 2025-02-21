@@ -14,7 +14,7 @@ end
 #== The following tests copy those in lark.py with the following exceptions:
 (1) No unicode tests (Julia is natively unicode)
 (2) No CYK/Earley/Dynamic lexer/skipped tests (not implemented in Lerche)
-(3) 
+(3) Extra test for token columns matching unicode grapheme positions
 
 ==#
 
@@ -713,6 +713,22 @@ null : "null"
             @test d.end_line== 2
             @test d.end_column== 3
         end
+
+	@testset "test_utf8_columns" begin
+	    g = raw"""start: A A 
+	              %ignore WS
+		      %import common(WS)
+	              A: /[^\s]+/
+		"""
+	    l = make_lark(g)
+	    t = Lerche.parse(l,"Lukáš Lukáš")
+	    print(t)
+	    tok = t.children[1]
+	    @test tok.end_column == 6
+	    tok = t.children[2]
+	    @test tok.column == 7
+	    @test tok.end_column == 12
+	end     
 
         @testset "test_reduce_cycle" begin
             """Tests an edge-condition in the LALR parser, in which a transition state looks exactly like the end state.
