@@ -5,8 +5,14 @@ name: CI
 on:
   push:
     branches: [ master ]
+    paths-ignore:
+        - '.github/**'
+
+
   pull_request:
     branches: [ master ]
+    paths-ignore:
+        - '.github/**'
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -15,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        julia-version: ['1','1.2','nightly']
+        julia-version: ['1','1.6','nightly']
         julia-arch: [x64]
         os: [ubuntu-latest]
     # Steps represent a sequence of tasks that will be executed as part of the job
@@ -30,14 +36,14 @@ jobs:
         with:
           coverage: 'false'
       - name: Do the coverage run
-        if: matrix.julia-version == '1.2' && matrix.julia-arch == 'x64'
+        if: matrix.julia-version == '1.6' && matrix.julia-arch == 'x64'
         uses: julia-actions/julia-runtest@latest
       - name: Process the coverage run
-        if: matrix.julia-version == '1.2' && matrix.julia-arch == 'x64'
+        if: matrix.julia-version == '1.6' && matrix.julia-arch == 'x64'
         run: |
                        julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; LCOV.writefile("lcov.info",process_folder())'
       - name: Upload coverage data
-        if: matrix.julia-version == '1.2' && matrix.julia-arch == 'x64'
+        if: matrix.julia-version == '1.6' && matrix.julia-arch == 'x64'
         uses: coverallsapp/github-action@master
         with:
               github-token: ${{ secrets.GITHUB_TOKEN }}
