@@ -112,6 +112,10 @@ Base.isvalid(t::Token,i::Int64) = isvalid(t.value,i)
 Base.iterate(t::Token) = Base.iterate(t.value)
 Base.iterate(t::Token,i::Int64) = Base.iterate(t.value,i)
 
+# Efficent conversion to String, otherwise goes through printing IO.
+
+String(t::Token) = t.value
+
 # Lexer.py implements a generic equality, where any comparison other
 # than with another token defaults to string comparison
 Base.:(==)(t1::Token,t2::Token) = begin
