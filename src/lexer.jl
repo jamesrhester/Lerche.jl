@@ -114,7 +114,7 @@ Base.iterate(t::Token,i::Int64) = Base.iterate(t.value,i)
 
 # Efficent conversion to String, otherwise goes through printing IO.
 
-String(t::Token) = t.value
+Base.String(t::Token) = t.value
 
 # Lexer.py implements a generic equality, where any comparison other
 # than with another token defaults to string comparison
